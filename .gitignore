@@ -1,0 +1,53 @@
+### Maven / Java (aplica a eureka-server, cloud-gateway y los 3 microservicios) ###
+target/
+!**/src/main/**/target/
+!**/src/test/**/target/
+*.class
+*.jar
+!.mvn/wrapper/maven-wrapper.jar
+HELP.md
+
+### Node / frontend-app ###
+node_modules/
+dist/
+build/
+!**/src/main/**/build/
+!**/src/test/**/build/
+.env
+.env.local
+.env.*.local
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+### Docker ###
+docker-compose.override.yml
+
+### Logs ###
+*.log
+logs/
+
+### IDEs ###
+.idea/
+*.iws
+*.iml
+*.ipr
+.vscode/
+.classpath
+.project
+.settings/
+.factorypath
+.apt_generated
+.springBeans
+.sts4-cache
+
+### Sistema operativo ###
+.DS_Store
+Thumbs.db
+desktop.ini
+
+### Secretos / configuración local ###
+*.env
+.env
+application-local.yml
+application-local.yaml

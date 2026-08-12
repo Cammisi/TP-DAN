@@ -1,0 +1,38 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: cloud-gateway
+  cloud:
+    gateway:
+      server:
+        webmvc:
+          routes:
+            - id: fan-identity-service
+              uri: lb://FAN-IDENTITY-SERVICE
+              predicates:
+                - Path=/api/fans/**
+            - id: match-ingestion-service
+              uri: lb://MATCH-INGESTION-SERVICE
+              predicates:
+                - Path=/api/matches/**
+            - id: alert-dispatcher-service
+              uri: lb://ALERT-DISPATCHER-SERVICE
+              predicates:
+                - Path=/api/alerts/**
+
+eureka:
+  client:
+    register-with-eureka: true
+    fetch-registry: true
+    service-url:
+      defaultZone: http://eureka-server:8761/eureka/
+  instance:
+    prefer-ip-address: true
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,gateway
