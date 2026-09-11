@@ -27,8 +27,8 @@ Estado del código backend. Todavía no se escribió lógica de negocio: los com
 | `frontend-app` | 🔴 No existe | La carpeta no está en el repo. Se crea en T-60. |
 | Seguridad (JWT) | 🔴 Falta | Solo la dependencia en el `pom` de fan-identity. |
 | Mensajería (Kafka) | 🔴 Falta | Infra levantada, sin producer ni consumer ni esquema de evento. |
-| Logs centralizados | 🔴 Falta | **Requisito obligatorio ausente del diseño del grupo.** |
-| Telemetría de métricas | 🔴 Falta | **Requisito obligatorio ausente del diseño del grupo.** |
+| Logs centralizados | 🔴 Falta | Requisito obligatorio del enunciado. Stack decidido en D-4; falta implementarlo (T-51). |
+| Telemetría de métricas | 🔴 Falta | Requisito obligatorio del enunciado. Stack decidido en D-4; falta implementarlo (T-50). |
 | Resilience4J (extra) | 🟡 Parcial | Circuito configurado, fallback devuelve lista vacía con un `TODO`. |
 
 ### Cobertura de los requisitos obligatorios del enunciado
@@ -88,13 +88,12 @@ Huecos que ni el enunciado ni la resolución propuesta resolvían. **Las seis es
 
 ## 3. Inconsistencias y riesgos detectados
 
-- [ ] **R-1 · Dos requisitos obligatorios no figuran en la resolución propuesta:** almacén centralizado de logs y telemetría de métricas. Es el hueco más grande del diseño actual. Cubierto por T-50 y T-51.
-- [ ] **R-2 · Stack muy reciente sin evidencia de que arranque:** Spring Boot 4.1 + Java 25 + Spring Cloud 2025.1.2 + `spring-cloud-starter-gateway-server-webmvc`. Nadie verificó todavía un `docker compose up --build` exitoso. **Es el riesgo número uno del proyecto** porque bloquea todo lo demás: por eso T-02 existe y va antes que cualquier código de negocio.
-- [ ] **R-3 · `frontend-app/` todavía no existe.** Es uno de los componentes que exige el enunciado y quedó al final del plan. Conviene arrancar T-60 en paralelo con la Fase 1 para no dejarlo para la última semana.
-- [ ] **R-4 · Los `application.yaml` de los 3 microservicios están casi vacíos** (solo `spring.application.name`). Toda la configuración vive en variables de entorno de `docker-compose.yml`, así que hoy **ningún microservicio se puede correr con `mvn spring-boot:run`** para desarrollar. Se corrige en T-02.
-- [ ] **R-5 · `fan-identity-service` tiene `spring-boot-starter-security` sin configurar.** Al arrancar, Spring Security protege todo con basic auth y una contraseña random en el log: cualquier request vía gateway daría 401. Se corrige en T-11.
-- [ ] **R-6 · El path del Feign client es provisorio** (`GET /api/fans/subscribers/{teamId}`). Se congela en T-01.
-- [ ] **R-7 · Actuator solo está en `cloud-gateway`**, y los healthchecks de Docker son TCP contra el puerto. Se corrige en T-50.
+- [ ] **R-1 · Stack muy reciente sin evidencia de que arranque:** Spring Boot 4.1 + Java 25 + Spring Cloud 2025.1.2 + `spring-cloud-starter-gateway-server-webmvc`. Nadie verificó todavía un `docker compose up --build` exitoso. **Es el riesgo número uno del proyecto** porque bloquea todo lo demás: por eso T-02 existe y va antes que cualquier código de negocio.
+- [ ] **R-2 · `frontend-app/` todavía no existe.** Es uno de los componentes que exige el enunciado y quedó al final del plan. Conviene arrancar T-60 en paralelo con la Fase 1 para no dejarlo para la última semana.
+- [ ] **R-3 · Los `application.yaml` de los 3 microservicios están casi vacíos** (solo `spring.application.name`). Toda la configuración vive en variables de entorno de `docker-compose.yml`, así que hoy **ningún microservicio se puede correr con `mvn spring-boot:run`** para desarrollar. Se corrige en T-02.
+- [ ] **R-4 · `fan-identity-service` tiene `spring-boot-starter-security` sin configurar.** Al arrancar, Spring Security protege todo con basic auth y una contraseña random en el log: cualquier request vía gateway daría 401. Se corrige en T-11.
+- [ ] **R-5 · El path del Feign client es provisorio** (`GET /api/fans/subscribers/{teamId}`). Se congela en T-01.
+- [ ] **R-6 · Actuator solo está en `cloud-gateway`**, y los healthchecks de Docker son TCP contra el puerto. Se corrige en T-50.
 
 ---
 
@@ -140,7 +139,7 @@ La Fase 0 y la Fase 2 se hacen **juntos**: definen contratos y tocan puntos de i
 ### Fase 0 — Cimientos (bloqueante, los tres juntos)
 
 - [x] **T-00 · Reorganizar la documentación** — `docs/`, `README.md`, `CLAUDE.md` · depende de: — · todos
-  - **Qué:** aplicar la estructura de la sección 4: separar responsabilidades de README y CLAUDE, eliminar la duplicación, crear `docs/assets/`, corregir las inconsistencias R-3, R-8 y R-9.
+  - **Qué:** aplicar la estructura de la sección 4: separar responsabilidades de README y CLAUDE, eliminar la duplicación, crear `docs/assets/`, y corregir los nombres heredados de la exportación del informe.
   - **Por qué:** los tres integrantes van a trabajar con IA sobre el mismo repo; si CLAUDE.md no fija la metodología y las convenciones, cada IA va a generar código con criterios distintos.
   - **Afecta:** `README.md`, `CLAUDE.md`, `docs/`.
   - **Requisitos:**
@@ -150,16 +149,17 @@ La Fase 0 y la Fase 2 se hacen **juntos**: definen contratos y tocan puntos de i
     - [x] Mockups movidos a `docs/assets/` con nombres descriptivos y enlaces de `resolucion_propuesta.md` actualizados.
   - **Terminada cuando:** un integrante que no escribió los docs puede leer solo el README y levantar el proyecto, y CLAUDE.md no repite nada que ya esté en el README.
 
-- [ ] **T-01 · Congelar el contrato de APIs y el esquema del evento Kafka** — transversal · depende de: D-1, D-2, D-3, D-6 · todos
+- [ ] **T-01 · Congelar el contrato de APIs y el esquema del evento Kafka** — transversal · depende de: — (D-1 a D-6 ya resueltas) · todos
   - **Qué:** escribir `docs/explicacion_contratos_api.md` con **todos** los endpoints (método, path, request, response, códigos de error, si es público/autenticado/interno) y el JSON del evento que viaja por Kafka, incluyendo nombre del tópico y clave de partición.
-  - **Por qué:** es lo único que permite que los tres carriles avancen en paralelo sin pisarse. Sin esto, el frontend no sabe qué consumir y alert-dispatcher no sabe qué pedirle a fan-identity (hoy el Feign client apunta a un path inventado, R-6).
+  - **Por qué:** es lo único que permite que los tres carriles avancen en paralelo sin pisarse. Sin esto, el frontend no sabe qué consumir y alert-dispatcher no sabe qué pedirle a fan-identity (hoy el Feign client apunta a un path inventado, R-5).
   - **Afecta:** ningún código todavía; condiciona todas las tareas de Fase 1 y 4.
   - **Requisitos:**
     - [ ] Endpoints públicos de auth (`/api/fans/auth/**`).
     - [ ] Endpoints del fan autenticado: suscripciones y notificaciones.
     - [ ] Endpoint de suscriptores por equipo que consume alert-dispatcher (reemplaza el path provisorio).
     - [ ] Endpoint interno de persistencia de notificación (callback de D-3), bajo un prefijo **fuera** de `/api/**` para que el gateway no lo exponga.
-    - [ ] Catálogo y eventos de `match-ingestion` (según D-1).
+    - [ ] Catálogo de ligas y equipos en `fan-identity-service`, bajo `/api/catalog/**` (por D-1).
+    - [ ] Consulta de partidos y eventos en `match-ingestion-service`.
     - [ ] Endpoint de ingesta de eventos (el que usa el admin para simular).
     - [ ] Esquema del evento Kafka: nombre del tópico, campos, tipos, ejemplo completo.
     - [ ] Formato único de error para todos los servicios.
@@ -167,7 +167,7 @@ La Fase 0 y la Fase 2 se hacen **juntos**: definen contratos y tocan puntos de i
 
 - [ ] **T-02 · Configuración base ejecutable y prueba de humo del stack** — los 5 servicios Spring · depende de: — · todos
   - **Qué:** completar los `application.yaml` de los 3 microservicios (puerto, cliente Eureka, datasource/Mongo/Kafka con valores por defecto para correr local), y verificar de punta a punta que `docker compose up --build` levanta todo y los 5 servicios aparecen registrados en Eureka.
-  - **Por qué:** R-2 y R-4. Hoy la configuración vive solo en variables de entorno de Docker, así que nadie puede correr un microservicio suelto para desarrollar; y el stack (Boot 4.1 / Java 25 / Spring Cloud 2025.1.2) nunca se ejecutó. Si algo de esto no compila, bloquea el proyecto entero y hay que saberlo ahora, no en la semana de entrega.
+  - **Por qué:** R-1 y R-3. Hoy la configuración vive solo en variables de entorno de Docker, así que nadie puede correr un microservicio suelto para desarrollar; y el stack (Boot 4.1 / Java 25 / Spring Cloud 2025.1.2) nunca se ejecutó. Si algo de esto no compila, bloquea el proyecto entero y hay que saberlo ahora, no en la semana de entrega.
   - **Afecta:** `*/src/main/resources/application.yaml`, eventualmente `pom.xml` y `docker-compose.yml`.
   - **Requisitos:**
     - [ ] Cada microservicio define `server.port` y `eureka.client.service-url.defaultZone` con default local, sobreescribible por variable de entorno (las de `docker-compose.yml` siguen funcionando).
@@ -197,7 +197,7 @@ La Fase 0 y la Fase 2 se hacen **juntos**: definen contratos y tocan puntos de i
 
 - [ ] **T-11 · Registro, login y emisión de JWT** — `fan-identity-service` · depende de: T-10 · carril A
   - **Qué:** endpoints públicos de registro y login, hash de contraseñas, emisión de JWT firmado, y la `SecurityFilterChain` del servicio.
-  - **Por qué:** cubre el requisito obligatorio de seguridad y el punto 3.1 de la resolución. Además desactiva el basic auth por defecto que hoy rompería todo (R-5).
+  - **Por qué:** cubre el requisito obligatorio de seguridad y el punto 3.1 de la resolución. Además desactiva el basic auth por defecto que hoy rompería todo (R-4).
   - **Afecta:** `.../fan_identity_service/` (auth, security, config).
   - **Requisitos:**
     - [ ] Registro valida email único y devuelve error claro si ya existe.
@@ -314,7 +314,7 @@ La Fase 0 y la Fase 2 se hacen **juntos**: definen contratos y tocan puntos de i
 
 ### Fase 2 — Integración y seguridad (los tres juntos)
 
-- [ ] **T-40 · Seguridad y CORS en el gateway** — `cloud-gateway` · depende de: T-11, D-2 · todos
+- [ ] **T-40 · Seguridad y CORS en el gateway** — `cloud-gateway` · depende de: T-11 · todos
   - **Qué:** filtro que valida el JWT en el gateway, lista de rutas públicas y configuración de CORS para el frontend.
   - **Por qué:** el gateway es el único punto de entrada; validar ahí evita repetir seguridad en cada microservicio. Sin CORS, el frontend no puede consumir nada.
   - **Afecta:** `cloud-gateway` (config y filtro), `pom.xml`.
@@ -347,9 +347,9 @@ La Fase 0 y la Fase 2 se hacen **juntos**: definen contratos y tocan puntos de i
 
 ### Fase 3 — Requisitos transversales del enunciado
 
-- [ ] **T-50 · Telemetría de métricas de rendimiento** — los 5 servicios Spring + compose · depende de: T-02, D-4 · carril C
+- [ ] **T-50 · Telemetría de métricas de rendimiento** — los 5 servicios Spring + compose · depende de: T-02 · carril C
   - **Qué:** Actuator + Micrometer con registro Prometheus en los 5 servicios, Prometheus y Grafana en el compose, y un dashboard con las métricas clave.
-  - **Por qué:** **requisito obligatorio del enunciado** hoy ausente. De paso permite migrar los healthchecks TCP a `/actuator/health` (R-7).
+  - **Por qué:** es uno de los requisitos obligatorios del enunciado. De paso permite migrar los healthchecks TCP a `/actuator/health` (R-6).
   - **Afecta:** los 5 `pom.xml` y `application.yaml`, `docker-compose.yml`, configuración de Prometheus y Grafana.
   - **Requisitos:**
     - [ ] Los 5 servicios exponen `/actuator/prometheus`.
@@ -359,9 +359,9 @@ La Fase 0 y la Fase 2 se hacen **juntos**: definen contratos y tocan puntos de i
     - [ ] Los endpoints de Actuator no quedan expuestos públicamente por el gateway.
   - **Terminada cuando:** generando tráfico con el flujo de T-42, las métricas se mueven en el dashboard de Grafana.
 
-- [ ] **T-51 · Almacén centralizado de logs** — transversal · depende de: T-50, D-4 · carril C
+- [ ] **T-51 · Almacén centralizado de logs** — transversal · depende de: T-50 · carril C
   - **Qué:** Loki + Promtail en el compose, logs de los 5 servicios en formato consistente y un identificador de correlación que permita seguir un evento a través de los servicios.
-  - **Por qué:** **requisito obligatorio del enunciado** hoy ausente. Reutiliza el Grafana de T-50.
+  - **Por qué:** es el otro requisito obligatorio del enunciado que falta. Reutiliza el Grafana de T-50.
   - **Afecta:** `docker-compose.yml`, configuración de logging de los servicios.
   - **Requisitos:**
     - [ ] Promtail recolecta los logs de todos los contenedores y los envía a Loki.
@@ -374,7 +374,7 @@ La Fase 0 y la Fase 2 se hacen **juntos**: definen contratos y tocan puntos de i
 
 - [ ] **T-60 · Scaffolding de `frontend-app`** — `frontend-app/` · depende de: T-02 · carril C
   - **Qué:** crear el proyecto Next.js (Pages Router), su Dockerfile y su servicio en `docker-compose.yml`, apuntando al gateway.
-  - **Por qué:** es el cuarto componente que exige el enunciado y hoy la carpeta no existe (R-3). Puede arrancar en paralelo con la Fase 1.
+  - **Por qué:** es el cuarto componente que exige el enunciado y hoy la carpeta no existe (R-2). Puede arrancar en paralelo con la Fase 1.
   - **Afecta:** `frontend-app/`, `docker-compose.yml`, `.gitignore`.
   - **Requisitos:**
     - [ ] Proyecto Next.js con Pages Router que levanta en desarrollo.
@@ -423,7 +423,7 @@ La Fase 0 y la Fase 2 se hacen **juntos**: definen contratos y tocan puntos de i
     - [ ] Se puede refrescar para ver alertas nuevas.
   - **Terminada cuando:** con el fan logueado y un evento ingestado, la alerta aparece en la pantalla.
 
-- [ ] **T-65 · Panel de administrador** — `frontend-app/` · depende de: T-63, T-21, T-31, D-5 · carril C
+- [ ] **T-65 · Panel de administrador** — `frontend-app/` · depende de: T-63, T-21, T-31 · carril C
   - **Qué:** pantalla de admin con el formulario para simular la carga de un evento deportivo y enlaces/estado de monitoreo.
   - **Por qué:** es el rol Administrador de la resolución y la forma de disparar la demo en vivo durante el coloquio.
   - **Afecta:** `frontend-app/` (páginas de admin).
@@ -463,7 +463,7 @@ La Fase 0 y la Fase 2 se hacen **juntos**: definen contratos y tocan puntos de i
   - **Requisitos:**
     - [ ] README refleja el estado final: servicios, puertos (incluidos Grafana/Prometheus), cómo levantar y cómo probar.
     - [ ] Una `explicacion_*` por cada tema que se vaya a defender en el coloquio.
-    - [ ] Esta planificación queda con todo marcado y las decisiones D-1 a D-6 resueltas.
+    - [ ] Esta planificación queda con todas las tareas marcadas.
   - **Terminada cuando:** alguien ajeno al grupo levanta y entiende el proyecto leyendo solo el README y `/docs`.
 
 - [ ] **T-73 · Ensayo del coloquio** — transversal · depende de: T-71, T-72 · todos
@@ -484,11 +484,11 @@ La Fase 0 y la Fase 2 se hacen **juntos**: definen contratos y tocan puntos de i
 | Fase | Tareas | Completadas |
 |---|---|---|
 | 0 — Cimientos | 3 | 1 |
-| 1 — Núcleo de dominio | 11 | 0 |
+| 1 — Núcleo de dominio | 12 | 0 |
 | 2 — Integración y seguridad | 3 | 0 |
 | 3 — Requisitos transversales | 2 | 0 |
 | 4 — Frontend | 6 | 0 |
 | 5 — Cierre y entrega | 4 | 0 |
-| **Total** | **29** | **1** |
+| **Total** | **30** | **1** |
 
 Actualizar esta tabla al cerrar cada tarea.
