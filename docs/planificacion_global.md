@@ -14,7 +14,7 @@ Documento de planificación y seguimiento del TP integrador. Es el **único luga
 
 ## 1. Estado actual del proyecto
 
-Foto al momento de escribir esta planificación (commit `7e1689e`).
+Estado del código backend. Todavía no se escribió lógica de negocio: los commits posteriores a esta planificación son solo documentación.
 
 | Componente | Estado | Detalle |
 |---|---|---|
@@ -24,7 +24,7 @@ Foto al momento de escribir esta planificación (commit `7e1689e`).
 | `fan-identity-service` | 🔴 Scaffolding | Solo la clase `@SpringBootApplication`. `application.yaml` casi vacío. Sin entidades, sin endpoints, sin seguridad configurada. |
 | `match-ingestion-service` | 🔴 Scaffolding | Solo la clase `@SpringBootApplication`. Sin documentos Mongo, sin endpoints, sin productor Kafka. |
 | `alert-dispatcher-service` | 🟡 Parcial | Feign client + Circuit Breaker configurados (paths provisorios). Sin consumer Kafka, sin orquestación. |
-| `frontend-app` | 🔴 No existe | La carpeta no está en el repo. Los docs ya lo marcan como pendiente (T-00); se crea en T-60. |
+| `frontend-app` | 🔴 No existe | La carpeta no está en el repo. Se crea en T-60. |
 | Seguridad (JWT) | 🔴 Falta | Solo la dependencia en el `pom` de fan-identity. |
 | Mensajería (Kafka) | 🔴 Falta | Infra levantada, sin producer ni consumer ni esquema de evento. |
 | Logs centralizados | 🔴 Falta | **Requisito obligatorio ausente del diseño del grupo.** |
@@ -90,19 +90,17 @@ Huecos que ni el enunciado ni la resolución propuesta resolvían. **Las seis es
 
 - [ ] **R-1 · Dos requisitos obligatorios no figuran en la resolución propuesta:** almacén centralizado de logs y telemetría de métricas. Es el hueco más grande del diseño actual. Cubierto por T-50 y T-51.
 - [ ] **R-2 · Stack muy reciente sin evidencia de que arranque:** Spring Boot 4.1 + Java 25 + Spring Cloud 2025.1.2 + `spring-cloud-starter-gateway-server-webmvc`. Nadie verificó todavía un `docker compose up --build` exitoso. **Es el riesgo número uno del proyecto** porque bloquea todo lo demás: por eso T-02 existe y va antes que cualquier código de negocio.
-- [ ] **R-3 · `frontend-app/` está documentado en README y CLAUDE pero no existe.** Los docs ya lo marcan como pendiente (T-00 ✅); falta crearlo en T-60.
+- [ ] **R-3 · `frontend-app/` todavía no existe.** Es uno de los componentes que exige el enunciado y quedó al final del plan. Conviene arrancar T-60 en paralelo con la Fase 1 para no dejarlo para la última semana.
 - [ ] **R-4 · Los `application.yaml` de los 3 microservicios están casi vacíos** (solo `spring.application.name`). Toda la configuración vive en variables de entorno de `docker-compose.yml`, así que hoy **ningún microservicio se puede correr con `mvn spring-boot:run`** para desarrollar. Se corrige en T-02.
 - [ ] **R-5 · `fan-identity-service` tiene `spring-boot-starter-security` sin configurar.** Al arrancar, Spring Security protege todo con basic auth y una contraseña random en el log: cualquier request vía gateway daría 401. Se corrige en T-11.
 - [ ] **R-6 · El path del Feign client es provisorio** (`GET /api/fans/subscribers/{teamId}`). Se congela en T-01.
 - [ ] **R-7 · Actuator solo está en `cloud-gateway`**, y los healthchecks de Docker son TCP contra el puerto. Se corrige en T-50.
-- [x] **R-8 · El mapa del proyecto en README y CLAUDE decía `tp-nube-deportes/`**, pero la carpeta real es `TP-DAN`. Corregido en T-00.
-- [x] **R-9 · Los mockups se llamaban `page_3_image_1_v2.png`**, nombres heredados de la exportación del informe. Movidos a `docs/assets/` con nombres descriptivos y enlaces de `resolucion_propuesta.md` actualizados en T-00.
 
 ---
 
 ## 4. Organización de la documentación
 
-Estructura propuesta para `/docs` (mantiene tus reglas, agrega solo una carpeta de imágenes):
+Estructura de `/docs`:
 
 ```
 docs/
@@ -119,23 +117,7 @@ docs/
 - `explicacion_*`: se escriben *después* de implementar algo no obvio, no antes.
 - Cada tarea de esta planificación enlaza a su `plan_*` una vez creado.
 
-**Reparto de responsabilidades entre `README.md` y `CLAUDE.md`** (hoy duplican problema, alcance, roles, mapa del proyecto, puertos y comandos Docker):
-
-| | `README.md` | `CLAUDE.md` |
-|---|---|---|
-| Audiencia | Persona que quiere entender o ejecutar el proyecto | IA que trabaja sobre el código |
-| Contenido | Problema, alcance, arquitectura, roles, tecnologías, cómo levantar, puertos, índice de `/docs` | Metodología de trabajo, convenciones de código, decisiones de arquitectura vigentes, gotchas técnicos, qué **no** hacer |
-| Regla | Es la fuente sobre el dominio | No repite el dominio: enlaza al README |
-
-Lo que hoy está en `CLAUDE.md` y debería moverse:
-- Problema, alcance, roles, mapa del proyecto, tabla de puertos, comandos Docker → **ya están en README**, se borran de CLAUDE.
-- "Scaffolding preparado para la llamada…" y "Puntos a verificar antes de la entrega" → **se quedan en CLAUDE** (son gotchas para quien escriba código), resumidos.
-- El detalle largo del Circuit Breaker → `docs/explicacion_circuit_breaker.md` cuando se implemente (T-31).
-
-Lo que hay que **agregar** a `CLAUDE.md`:
-- La metodología de trabajo (planificación global → `plan_*` → implementación).
-- Criterios de código para el nivel del TP: código simple y legible por encima de abstracciones; sin capas ni patrones que el TP no pida; comentarios en español solo donde el *por qué* no sea obvio; DTOs como `record`; nombres de dominio en inglés y comentarios en español (como ya viene el código).
-- Prohibiciones explícitas: no inventar endpoints fuera del contrato de T-01, no agregar dependencias sin justificarlo, no tocar `docker-compose.yml` sin actualizar `docs/explicacion_docker_compose.md`.
+**README vs CLAUDE.md:** el `README.md` es la fuente sobre el dominio, escrita para una persona que quiera entender o ejecutar el proyecto. `CLAUDE.md` es la guía de trabajo para la IA (metodología, criterios de código, decisiones vigentes, gotchas) y no repite el dominio: lo enlaza.
 
 ---
 
