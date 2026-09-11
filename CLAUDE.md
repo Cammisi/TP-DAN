@@ -43,11 +43,16 @@ El código lo tienen que poder leer y defender tres estudiantes en un coloquio. 
 
 ## Decisiones de arquitectura vigentes
 
+- **El catálogo de ligas y equipos vive en `fan-identity-service` (PostgreSQL).** `League` y `Team` conviven con `Fan` y `Subscription`, así la suscripción tiene FK real al equipo. `match-ingestion-service` guarda partidos y eventos en Mongo referenciando `teamId` como string, sin catálogo propio y sin validarlo contra otro servicio. El catálogo se sirve bajo su propia ruta `/api/catalog/**` en el gateway.
 - **Historial de alertas vía callback HTTP.** `alert-dispatcher-service` no tiene base de datos propia. Después de resolver los suscriptos, hace un `POST` a un endpoint interno de `fan-identity-service` que persiste la notificación. Mantiene el Single Source of Truth real (los datos de fans, incluido su historial, viven solo en fan-identity-service) en vez de duplicar estado.
 - **Endpoints internos fuera de `/api/**`.** Los endpoints que consumen otros microservicios (suscriptores por equipo, alta de notificación) van bajo un prefijo que el gateway no rutea, así quedan inalcanzables desde el host por construcción.
+- **El JWT se valida en el gateway y en `fan-identity-service`.** El gateway es la primera línea: rechaza lo no autenticado antes de que llegue a los microservicios. fan-identity valida además porque necesita saber *qué* fan hace la request. `match-ingestion-service` y `alert-dispatcher-service` **no** llevan Spring Security propio: no están expuestos al host y solo se alcanzan por el gateway.
+- **El rol Administrador es un `ROLE_ADMIN` real** en fan-identity, viaja en los claims del JWT y hay un usuario admin sembrado.
+- **`/api/alerts/**` sirve solo el estado del despachador** (últimos eventos procesados, estado del circuito) para el panel de admin. El historial de alertas del fan **no** se lee de ahí, sino de `GET /api/fans/me/notifications`.
+- **Observabilidad: Prometheus + Grafana + Loki + Promtail.** Métricas: Actuator + Micrometer → Prometheus → Grafana. Logs: SLF4J/Logback → Promtail → Loki → el mismo Grafana. Ojo con la confusión habitual: SLF4J escribe los logs pero no los centraliza, Prometheus guarda números y no texto, y Grafana no almacena nada. El "almacén centralizado de logs" que pide el enunciado es **Loki**.
 - **Frontend con Next.js (Pages Router)**, consumiendo exclusivamente `cloud-gateway` en `:8080`. Se eligió sobre React+Vite plano porque hay un módulo dedicado de la materia y el ruteo por archivos simplifica separar las pantallas por rol.
 
-Hay **decisiones todavía abiertas** (dueño del catálogo de equipos, dónde se valida el JWT, stack de observabilidad, rol admin) en la sección 2 de la [planificación global](docs/planificacion_global.md). Si una tarea depende de alguna, confirmala con el integrante antes de implementar.
+Estas decisiones están registradas con su fundamento en la sección 2 de la [planificación global](docs/planificacion_global.md). No las contradigas sin avisar; si una tarea parece requerir lo contrario, planteálo antes de implementar.
 
 ## Gotchas técnicos
 

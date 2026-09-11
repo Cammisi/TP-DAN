@@ -47,35 +47,41 @@ Foto al momento de escribir esta planificación (commit `7e1689e`).
 
 ---
 
-## 2. Decisiones abiertas a validar
+## 2. Decisiones de diseño
 
-Tomé una recomendación para cada una para no frenar la planificación. **Validarlas en grupo antes de arrancar la Fase 1**; si alguna cambia, hay que ajustar las tareas afectadas.
+Huecos que ni el enunciado ni la resolución propuesta resolvían. **Las seis están decididas**: las tareas de la sección 6 ya las reflejan. Si alguna se reabre, hay que revisar las tareas listadas en *Afecta*.
 
-- [ ] **D-1 · ¿Quién es dueño del catálogo de ligas y equipos?**
-  Ni el enunciado ni la resolución se lo asignan a ningún microservicio, pero el Fan "busca equipos o ligas en el catálogo".
-  **Recomendación:** vive en `match-ingestion-service` (MongoDB), que ya es el dueño del dominio deportivo. `fan-identity-service` guarda la suscripción con `teamId` (referencia débil, sin FK entre servicios) más `teamName` desnormalizado, para no tener que llamar a otro servicio solo para mostrar un nombre.
-  *Afecta:* T-12, T-20, T-22, T-63.
+- [x] **D-1 · ¿Quién es dueño del catálogo de ligas y equipos?** → **`fan-identity-service` (PostgreSQL)**
+  `League` y `Team` viven en Postgres junto a `Fan` y `Subscription`, con FK real entre suscripción y equipo. Es exactamente la "integridad referencial" con la que el informe justificó elegir SQL.
+  **Consecuencias a tener en cuenta:**
+  - `match-ingestion-service` no tiene catálogo: guarda partidos y eventos en Mongo referenciando `teamId` como string (referencia débil entre servicios, normal en microservicios).
+  - El gateway necesita una ruta nueva `/api/catalog/**` hacia fan-identity; servir el catálogo bajo `/api/fans/**` sería confuso.
+  - `match-ingestion` **no puede validar localmente** que el `teamId` de un evento entrante exista. Valida formato y que el partido exista en su propia base; la validación contra el catálogo queda fuera de alcance para no agregar otra llamada entre servicios.
+  - La suscripción no necesita `teamName` desnormalizado: se resuelve con un join dentro de fan-identity.
+  *Afecta:* T-10, T-12, T-15, T-20, T-21, T-22, T-63.
 
-- [ ] **D-2 · ¿Dónde se valida el JWT?**
-  **Recomendación:** el gateway valida la firma y bloquea lo no autenticado (primera línea); `fan-identity-service` valida también porque necesita saber *qué* fan es. `match-ingestion` y `alert-dispatcher` no llevan Spring Security propio: no están expuestos al host y solo se alcanzan por el gateway.
+- [x] **D-2 · ¿Dónde se valida el JWT?** → **en el gateway y en `fan-identity-service`**
+  El gateway valida la firma y bloquea lo no autenticado: es la primera línea y evita que tráfico anónimo llegue a los microservicios. `fan-identity-service` valida también, porque necesita saber *qué* fan está haciendo la request para resolver sus suscripciones y notificaciones. `match-ingestion` y `alert-dispatcher` no llevan Spring Security propio: no están expuestos al host y solo se alcanzan por el gateway.
   *Afecta:* T-11, T-40, T-41.
 
-- [ ] **D-3 · Persistencia del historial de alertas.**
-  `CLAUDE.md` ya decidió el **callback HTTP** desde alert-dispatcher hacia fan-identity. El enunciado habilita explícitamente la alternativa de compartir Postgres entre dos microservicios, que sería menos código.
-  **Recomendación:** mantener el callback HTTP. Es más defendible en el coloquio (Single Source of Truth real) y el scaffolding de Feign ya está hecho.
+- [x] **D-3 · Persistencia del historial de alertas** → **callback HTTP**
+  Después de resolver los suscriptos, `alert-dispatcher-service` hace un `POST` a un endpoint interno de `fan-identity-service` que persiste la notificación. Se mantiene lo que ya estaba decidido en `CLAUDE.md`: Single Source of Truth real y más defendible en el coloquio que compartir la base Postgres entre dos servicios. A cambio, hay que blindar ese endpoint interno (T-41).
   *Afecta:* T-14, T-30, T-41.
 
-- [ ] **D-4 · Stack de observabilidad (logs + métricas).**
-  **Recomendación:** **Prometheus + Grafana + Loki + Promtail**, todo en el mismo `docker-compose.yml`. Una sola UI (Grafana) cubre los dos requisitos obligatorios, es liviano comparado con ELK y no requiere tocar el código de las apps para los logs (Promtail lee los logs de los contenedores).
+- [x] **D-4 · Stack de observabilidad (logs + métricas)** → **Prometheus + Grafana + Loki + Promtail**
+  - **Métricas:** Actuator + Micrometer exponen → Prometheus almacena → Grafana muestra.
+  - **Logs:** SLF4J/Logback escriben (ya viene con Spring Boot) → Promtail recolecta de los contenedores → Loki almacena → el mismo Grafana muestra.
+
+  Se eligió sobre ELK por dos motivos: el grupo ya vio Prometheus y Grafana en la materia, y Elasticsearch pesa demasiado para correr junto a Postgres, MongoDB, Kafka y cinco JVMs en una notebook.
+  **Aclaración conceptual:** SLF4J es la API con la que se *escriben* los logs dentro de la app, no un almacén centralizado; Prometheus guarda números, no texto de log; Grafana no almacena nada, solo visualiza. El requisito de "almacén centralizado de logs" lo cumple **Loki**.
   *Afecta:* T-50, T-51.
 
-- [ ] **D-5 · ¿Cómo se materializa el rol Administrador?**
-  **Recomendación:** un `ROLE_ADMIN` real en `fan-identity-service` con un usuario admin sembrado. Cuesta poco y evita tener un panel sin autenticación.
+- [x] **D-5 · ¿Cómo se materializa el rol Administrador?** → **`ROLE_ADMIN` real en `fan-identity-service`**
+  El rol viaja en los claims del JWT y hay un usuario admin sembrado. Cuesta poco y evita tener un panel de administración sin autenticación.
   *Afecta:* T-10, T-11, T-40, T-65.
 
-- [ ] **D-6 · ¿Qué sirve la ruta `/api/alerts/**` del gateway?**
-  Hoy la ruta existe pero, con D-3, el historial del fan se lee desde `fan-identity-service`.
-  **Recomendación:** `alert-dispatcher-service` expone solo estado del despachador (últimos eventos procesados, estado del circuito) para el panel de admin. El historial del fan se lee en `GET /api/fans/me/notifications`.
+- [x] **D-6 · ¿Qué sirve la ruta `/api/alerts/**` del gateway?** → **solo el estado del despachador**
+  Con D-3, el historial del fan se lee desde `fan-identity-service` (`GET /api/fans/me/notifications`), así que la ruta quedaba huérfana. `alert-dispatcher-service` la usa para exponer últimos eventos procesados y estado del circuito, que es lo que consume el panel de administrador.
   *Afecta:* T-31, T-64, T-65.
 
 ---
@@ -194,16 +200,18 @@ La Fase 0 y la Fase 2 se hacen **juntos**: definen contratos y tocan puntos de i
 
 #### Carril A — `fan-identity-service`
 
-- [ ] **T-10 · Modelo de datos y persistencia del fan** — `fan-identity-service` · depende de: T-01, T-02 · carril A
-  - **Qué:** entidades JPA `Fan` y `Subscription` (+ rol, según D-5), repositorios y datos semilla (algunos fans y un admin).
-  - **Por qué:** es la base de todo el carril A; la relación muchos-a-muchos fan↔equipo es la justificación de haber elegido PostgreSQL.
+- [ ] **T-10 · Modelo de datos, catálogo y persistencia** — `fan-identity-service` · depende de: T-01, T-02 · carril A
+  - **Qué:** entidades JPA `Fan`, `Subscription`, `League` y `Team` (+ rol, según D-5), repositorios y datos semilla (ligas y equipos reales, algunos fans y un admin).
+  - **Por qué:** es la base de todo el carril A. Por D-1 el catálogo deportivo vive acá, así que la suscripción puede tener FK real al equipo: es la justificación de haber elegido PostgreSQL.
   - **Afecta:** `.../fan_identity_service/` (paquetes de dominio y repositorio), `application.yaml`.
   - **Requisitos:**
     - [ ] `Fan` con email único, contraseña hasheada (BCrypt) y rol.
-    - [ ] `Subscription` con `fanId` + `teamId` (+ `teamName` si se aprueba D-1), con restricción de unicidad para no duplicar suscripciones.
+    - [ ] `League` y `Team`, con `Team` perteneciendo a una `League`.
+    - [ ] `Subscription` con FK a `Fan` y a `Team`, y restricción de unicidad para no duplicar suscripciones.
+    - [ ] El identificador de `Team` es el mismo `teamId` que viaja en los eventos de Kafka y que guarda `match-ingestion-service`.
     - [ ] Datos semilla cargados al arrancar, idempotentes (no duplican al reiniciar).
     - [ ] Las tablas se crean solas contra el Postgres del compose.
-  - **Terminada cuando:** el servicio arranca contra Postgres, crea el esquema y los datos semilla se ven consultando la base.
+  - **Terminada cuando:** el servicio arranca contra Postgres, crea el esquema y los datos semilla (ligas, equipos, fans, admin) se ven consultando la base.
 
 - [ ] **T-11 · Registro, login y emisión de JWT** — `fan-identity-service` · depende de: T-10 · carril A
   - **Qué:** endpoints públicos de registro y login, hash de contraseñas, emisión de JWT firmado, y la `SecurityFilterChain` del servicio.
@@ -224,7 +232,9 @@ La Fase 0 y la Fase 2 se hacen **juntos**: definen contratos y tocan puntos de i
   - **Requisitos:**
     - [ ] Los tres endpoints operan **siempre** sobre el fan del JWT, nunca sobre un id que venga en el body.
     - [ ] Seguir dos veces el mismo equipo no duplica ni falla con error 500.
+    - [ ] Seguir un equipo inexistente se rechaza con un error claro (la FK a `Team` lo garantiza).
     - [ ] Dejar de seguir algo no suscripto devuelve un código coherente, no una excepción.
+    - [ ] El listado devuelve el nombre del equipo y su liga, resueltos por join (sin desnormalizar).
   - **Terminada cuando:** con un JWT válido se puede seguir, listar y dejar de seguir equipos, y los cambios persisten tras reiniciar el servicio.
 
 - [ ] **T-13 · Endpoint de suscriptores por equipo** — `fan-identity-service` · depende de: T-12 · carril A
@@ -247,17 +257,27 @@ La Fase 0 y la Fase 2 se hacen **juntos**: definen contratos y tocan puntos de i
     - [ ] El listado devuelve solo las notificaciones del fan del JWT, ordenadas de más nueva a más vieja.
   - **Terminada cuando:** insertando una notificación por el endpoint interno, el fan la ve en su historial.
 
+- [ ] **T-15 · Endpoints de catálogo de ligas y equipos** — `fan-identity-service`, `cloud-gateway` · depende de: T-10, T-11 · carril A
+  - **Qué:** endpoints de lectura para listar ligas y buscar equipos por nombre, más la ruta `/api/catalog/**` en el gateway.
+  - **Por qué:** el Fan "busca equipos o ligas en el catálogo" antes de suscribirse, y por D-1 el catálogo vive en este servicio. Va bajo su propio prefijo porque servirlo desde `/api/fans/**` sería confuso.
+  - **Afecta:** `.../fan_identity_service/` (controlador de catálogo), `cloud-gateway/application.yaml`.
+  - **Requisitos:**
+    - [ ] Listado de ligas y listado de equipos, con filtro por nombre.
+    - [ ] Los equipos devuelven el `teamId` que acepta T-12 para suscribirse.
+    - [ ] La ruta `/api/catalog/**` del gateway enruta a `fan-identity-service` vía Eureka.
+  - **Terminada cuando:** vía gateway se puede buscar un equipo por nombre y usar el `teamId` devuelto para suscribirse.
+
 #### Carril B — `match-ingestion-service` y `alert-dispatcher-service`
 
-- [ ] **T-20 · Modelo de documentos y catálogo deportivo** — `match-ingestion-service` · depende de: T-01, T-02, D-1 · carril B
-  - **Qué:** documentos Mongo para liga, equipo, partido y evento deportivo, con repositorios y datos semilla (un par de ligas, equipos y partidos).
-  - **Por qué:** es la justificación de haber elegido MongoDB (eventos heterogéneos) y sin catálogo el fan no tiene a qué suscribirse.
+- [ ] **T-20 · Modelo de documentos de partidos y eventos** — `match-ingestion-service` · depende de: T-01, T-02 · carril B
+  - **Qué:** documentos Mongo para partido y evento deportivo, con repositorios y datos semilla (un par de partidos).
+  - **Por qué:** es la justificación de haber elegido MongoDB: los eventos son heterogéneos y un esquema de documentos flexible encaja mejor que uno relacional. Por D-1 el catálogo de ligas/equipos **no** vive acá.
   - **Afecta:** `.../match_ingestion_service/` (dominio y repositorios).
   - **Requisitos:**
     - [ ] El documento de evento soporta tipos distintos (gol, tarjeta, fin de partido) sin campos obligatorios que solo apliquen a uno.
-    - [ ] `teamId` es un identificador estable, el mismo que guardan las suscripciones de T-12.
+    - [ ] Partido y evento referencian `teamId` como string: el mismo identificador que usa el catálogo de T-10, sin FK entre servicios.
     - [ ] Semilla idempotente.
-  - **Terminada cuando:** el servicio arranca contra Mongo y el catálogo semilla se puede consultar desde la base.
+  - **Terminada cuando:** el servicio arranca contra Mongo y los partidos semilla se pueden consultar desde la base.
 
 - [ ] **T-21 · Endpoint de ingesta de eventos** — `match-ingestion-service` · depende de: T-20 · carril B
   - **Qué:** el endpoint que recibe un evento deportivo de un proveedor externo, lo valida y lo persiste. Es también el que usa el admin para simular.
@@ -265,19 +285,19 @@ La Fase 0 y la Fase 2 se hacen **juntos**: definen contratos y tocan puntos de i
   - **Afecta:** `.../match_ingestion_service/` (controlador y servicio de ingesta).
   - **Requisitos:**
     - [ ] Valida el formato y rechaza eventos incompletos con un error claro, sin persistirlos.
-    - [ ] Rechaza eventos cuyo `teamId` o partido no existan en el catálogo.
+    - [ ] Rechaza eventos cuyo partido no exista en su propia base. **No** valida el `teamId` contra el catálogo: por D-1 vive en otro servicio y no vale la pena otra llamada entre servicios.
     - [ ] Persiste el evento y devuelve su identificador.
   - **Terminada cuando:** un POST con un evento válido lo deja guardado en Mongo, y uno inválido devuelve error sin ensuciar la base.
 
-- [ ] **T-22 · Consulta de catálogo y eventos** — `match-ingestion-service` · depende de: T-20 · carril B
-  - **Qué:** endpoints de lectura para que el frontend liste ligas, equipos (con búsqueda por nombre) y el historial de eventos de un partido.
-  - **Por qué:** el Fan "busca equipos o ligas en el catálogo" antes de suscribirse.
+- [ ] **T-22 · Consulta de partidos y eventos** — `match-ingestion-service` · depende de: T-20 · carril B
+  - **Qué:** endpoints de lectura para que el frontend liste los partidos y el historial de eventos de un partido. El catálogo de ligas y equipos **no** está acá: es T-15.
+  - **Por qué:** alimenta el muro de eventos en vivo del panel principal (ver el mockup en `docs/assets/mockup_panel_principal.png`).
   - **Afecta:** `.../match_ingestion_service/` (controlador de consulta).
   - **Requisitos:**
-    - [ ] Listado de ligas y de equipos, con filtro por nombre.
-    - [ ] Los equipos devuelven el `teamId` que el frontend usa para suscribirse.
+    - [ ] Listado de partidos, con filtro por equipo.
     - [ ] Eventos de un partido ordenados cronológicamente.
-  - **Terminada cuando:** vía gateway se puede buscar un equipo por nombre y obtener el `teamId` que acepta T-12.
+    - [ ] Las respuestas incluyen el `teamId` de cada equipo participante para que el frontend pueda cruzarlo con el catálogo.
+  - **Terminada cuando:** vía gateway se pueden listar partidos y ver los eventos de uno en orden cronológico.
 
 - [ ] **T-23 · Publicación del evento en Kafka** — `match-ingestion-service` · depende de: T-21 · carril B
   - **Qué:** tras persistir un evento, publicarlo en el tópico definido en T-01, con el esquema acordado.
@@ -401,7 +421,7 @@ La Fase 0 y la Fase 2 se hacen **juntos**: definen contratos y tocan puntos de i
     - [ ] Tras loguear, redirige al panel principal.
   - **Terminada cuando:** un usuario nuevo se registra, inicia sesión y entra al panel sin tocar la consola.
 
-- [ ] **T-63 · Catálogo y mis suscripciones** — `frontend-app/` · depende de: T-62, T-12, T-22 · carril C
+- [ ] **T-63 · Catálogo y mis suscripciones** — `frontend-app/` · depende de: T-62, T-12, T-15 · carril C
   - **Qué:** pantalla de búsqueda de equipos/ligas con seguir/dejar de seguir, y pantalla de suscripciones, según los mockups.
   - **Por qué:** es la funcionalidad principal del rol Fan.
   - **Afecta:** `frontend-app/` (páginas de catálogo y suscripciones).
@@ -482,11 +502,11 @@ La Fase 0 y la Fase 2 se hacen **juntos**: definen contratos y tocan puntos de i
 | Fase | Tareas | Completadas |
 |---|---|---|
 | 0 — Cimientos | 3 | 1 |
-| 1 — Núcleo de dominio | 10 | 0 |
+| 1 — Núcleo de dominio | 11 | 0 |
 | 2 — Integración y seguridad | 3 | 0 |
 | 3 — Requisitos transversales | 2 | 0 |
 | 4 — Frontend | 6 | 0 |
 | 5 — Cierre y entrega | 4 | 0 |
-| **Total** | **28** | **1** |
+| **Total** | **29** | **1** |
 
 Actualizar esta tabla al cerrar cada tarea.
