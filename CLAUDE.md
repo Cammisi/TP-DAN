@@ -21,7 +21,7 @@ Los fanáticos del deporte consumen información de múltiples fuentes (redes so
 
 - **fan-identity-service** — ciclo de vida del usuario, perfiles y persistencia de suscripciones (relación muchos-a-muchos fan↔equipo). Emite y valida JWT (Spring Security). PostgreSQL porque la relación de suscripciones necesita integridad referencial y transaccionalidad.
 - **match-ingestion-service** — gateway de datos externos: ingesta resultados/eventos de partidos, valida el formato y los persiste para consulta histórica. MongoDB porque los eventos son heterogéneos (un "gol" en fútbol no tiene los mismos atributos que un "quiebre de servicio" en tenis) y un esquema de documentos flexible encaja mejor que uno relacional. Emite eventos a Kafka cada vez que detecta un evento relevante.
-- **alert-dispatcher-service** — consume los eventos de Kafka; por cada uno (ej. "Gol de Colón") consulta a `fan-identity-service` quiénes están suscritos y genera el registro de notificación. No tiene base de datos propia (principio de *Single Source of Truth*: los datos de fans viven solo en fan-identity-service). Esa consulta está protegida con **Circuit Breaker** (Resilience4j vía `spring-cloud-starter-circuitbreaker-resilience4j`): si fan-identity-service cae o tiene latencia alta, el circuito se abre para que alert-dispatcher-service no colapse esperando respuestas, en vez de eso aplica el fallback (ver más abajo).
+- **alert-dispatcher-service** — consume los eventos de Kafka; por cada uno (ej. "Gol de Colón") consulta a `fan-identity-service` quiénes están suscritos y genera el registro de notificación. No tiene base de datos propia (principio de *Single Source of Truth*: los datos de fans viven solo en fan-identity-service) — el registro de notificación se persiste vía un callback HTTP a un endpoint interno de fan-identity-service (ver "Decisiones de arquitectura"). Esa consulta está protegida con **Circuit Breaker** (Resilience4j vía `spring-cloud-starter-circuitbreaker-resilience4j`): si fan-identity-service cae o tiene latencia alta, el circuito se abre para que alert-dispatcher-service no colapse esperando respuestas, en vez de eso aplica el fallback (ver más abajo).
 
 ### Scaffolding ya preparado para la llamada fan-identity-service ← alert-dispatcher-service
 
@@ -33,6 +33,11 @@ En `alert-dispatcher-service` (paquete `com.tpnube.alert_dispatcher_service`):
 - Se agregó `spring-cloud-starter-openfeign` al `pom.xml` y `@EnableFeignClients` en `AlertDispatcherServiceApplication`.
 
 Importante: el pom usa `spring-cloud-starter-circuitbreaker-resilience4j` (la abstracción **Spring Cloud CircuitBreaker**, API programática vía `CircuitBreakerFactory`), no `resilience4j-spring-boot3`. Por eso el wiring usa `circuitBreakerFactory.create(...).run(...)` en vez de la anotación `@CircuitBreaker` — mezclar ambos estilos sin la dependencia correcta no compila.
+
+## Decisiones de arquitectura
+
+- **Persistencia del historial de alertas:** alert-dispatcher-service no tiene DB propia, pero necesita que el Fan pueda ver su historial de notificaciones. Se resuelve con un **callback HTTP**: después de resolver los suscriptos vía `FanIdentityLookupService`, alert-dispatcher-service hace un `POST` a un endpoint interno de fan-identity-service (a definir, ej. `POST /api/fans/{fanId}/notifications`) que persiste la notificación junto con los datos del fan. Mantiene la Single Source of Truth real (los datos de fans, incluido su historial, viven solo en fan-identity-service) en vez de duplicar estado en alert-dispatcher-service.
+- **Frontend:** `frontend-app` se construye con **Next.js** (Pages Router, según lo visto en la materia), consumiendo exclusivamente `cloud-gateway` en `:8080`. Se eligió sobre React+Vite plano porque hay un módulo dedicado de la materia y el ruteo basado en archivos simplifica separar las pantallas por rol (Fan/Admin).
 
 ## Mapa del proyecto
 
