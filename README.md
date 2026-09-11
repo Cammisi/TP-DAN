@@ -29,13 +29,15 @@ match-ingestion-service ──▶ Kafka ──▶ alert-dispatcher-service ─�
 
 | Servicio | Responsabilidad | Datos |
 |---|---|---|
-| **fan-identity-service** | Registro, login, JWT, perfiles y suscripciones (fan ↔ equipo) | PostgreSQL |
+| **fan-identity-service** | Registro, login, JWT, perfiles, catálogo de ligas y equipos, y suscripciones (fan ↔ equipo) | PostgreSQL |
 | **match-ingestion-service** | Ingesta y valida eventos de partidos desde proveedores externos, los persiste y los publica en Kafka | MongoDB |
 | **alert-dispatcher-service** | Consume eventos de Kafka, consulta a fan-identity-service quiénes están suscritos y genera las notificaciones | Sin base propia (Single Source of Truth) |
 | **eureka-server** | Service discovery | — |
 | **cloud-gateway** | Punto de entrada único, enruta por load balancing hacia los microservicios vía Eureka | — |
 
 La llamada de `alert-dispatcher-service` a `fan-identity-service` está protegida con **Circuit Breaker** (Resilience4j): si fan-identity-service cae o responde con latencia alta, el circuito se abre para evitar que alert-dispatcher-service colapse esperando respuestas.
+
+El catálogo de ligas y equipos vive en `fan-identity-service` y no en `match-ingestion-service`, aunque este último sea el dueño del dominio deportivo: así la suscripción tiene integridad referencial real contra el equipo, que es la razón por la que se eligió PostgreSQL. `match-ingestion-service` guarda partidos y eventos referenciando el identificador del equipo, sin clave foránea entre servicios.
 
 ## Roles de usuario
 
