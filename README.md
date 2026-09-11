@@ -18,8 +18,8 @@ Arquitectura de microservicios con descubrimiento de servicios (Eureka) y un API
 
 ```
 frontend-app ──▶ cloud-gateway (8080) ──▶ ┌ fan-identity-service (PostgreSQL)
-                                            ├ match-ingestion-service (MongoDB)
-                                            └ alert-dispatcher-service
+                                          ├ match-ingestion-service (MongoDB)
+                                          └ alert-dispatcher-service
                         │
                     eureka-server (registro y descubrimiento)
 
@@ -47,23 +47,32 @@ La llamada de `alert-dispatcher-service` a `fan-identity-service` está protegid
 - **Backend:** Spring Boot 4.1, Spring Cloud 2025.1.2 (Eureka, Gateway MVC, OpenFeign, Circuit Breaker/Resilience4j), Spring Security + JWT, Java 25.
 - **Mensajería:** Apache Kafka (modo KRaft, sin ZooKeeper).
 - **Persistencia:** PostgreSQL (fan-identity-service), MongoDB (match-ingestion-service).
+- **Frontend:** Next.js (Pages Router).
 - **Infraestructura:** Docker / Docker Compose.
+
+## Estado del proyecto
+
+El proyecto está en etapa inicial: la infraestructura (Eureka, gateway, Docker Compose con Postgres, MongoDB y Kafka) está armada, y los tres microservicios tienen su esqueleto Spring Boot creado pero todavía sin lógica de negocio. El frontend todavía no fue creado.
+
+El detalle del avance, las tareas pendientes y el orden en que hay que abordarlas están en **[docs/planificacion_global.md](docs/planificacion_global.md)**.
 
 ## Estructura del repositorio
 
 ```
-tp-nube-deportes/
+TP-DAN/
 ├── backend-app/
 │   ├── infrastructure/
-│   │   ├── eureka-server/       # Service Discovery — puerto 8761
-│   │   └── cloud-gateway/       # API Gateway — puerto 8080
+│   │   ├── eureka-server/              # Service Discovery — puerto 8761
+│   │   └── cloud-gateway/              # API Gateway — puerto 8080
 │   └── microservices/
-│       ├── fan-identity-service/       # puerto 8081
-│       ├── match-ingestion-service/    # puerto 8082
-│       └── alert-dispatcher-service/   # puerto 8083
-├── frontend-app/                       # Cliente web (consume únicamente el gateway)
+│       ├── fan-identity-service/       # puerto 8081 — PostgreSQL
+│       ├── match-ingestion-service/    # puerto 8082 — MongoDB + Kafka
+│       └── alert-dispatcher-service/   # puerto 8083 — Kafka
+├── frontend-app/                       # (pendiente) Cliente web, consume únicamente el gateway
+├── docs/                               # Planificación y documentación del TP
 ├── docker-compose.yml
-└── CLAUDE.md                           # Notas técnicas de desarrollo
+├── README.md
+└── CLAUDE.md                           # Instrucciones para la IA que trabaja sobre el proyecto
 ```
 
 ## Cómo levantar el proyecto
@@ -77,19 +86,55 @@ docker compose up --build
 # Levantar en segundo plano
 docker compose up --build -d
 
-# Apagar
+# Reconstruir un único servicio
+docker compose up --build fan-identity-service
+
+# Ver logs de un servicio
+docker compose logs -f cloud-gateway
+
+# Apagar (conserva los volúmenes de datos)
 docker compose down
+
+# Apagar y borrar también los volúmenes (reset completo de datos)
+docker compose down -v
 ```
+
+El orden de arranque está gobernado por `depends_on` con `condition: service_healthy`: las bases de datos y Kafka deben pasar su healthcheck antes de que arranquen los microservicios correspondientes, y `eureka-server` debe estar saludable antes que cualquier cliente Eureka.
+
+> El stack todavía no fue verificado en ejecución de punta a punta. Esa verificación es la tarea T-02 de la planificación global.
 
 ## Puertos y paneles
 
-| Servicio | Puerto | Descripción |
-|---|:---:|---|
-| cloud-gateway | 8080 | Único puerto que debe consumir el frontend |
-| eureka-server | 8761 | Dashboard de registro de servicios |
-| PostgreSQL | 5432 | Base de datos de fan-identity-service |
-| MongoDB | 27017 | Base de datos de match-ingestion-service |
-| Kafka | 9092 | Broker de mensajería |
-| Kafka UI | 8090 | Panel web de administración de tópicos y consumers |
+| Servicio | Puerto | Expuesto al host | Descripción |
+|---|:---:|:---:|---|
+| cloud-gateway | 8080 | Sí | Único puerto que debe consumir el frontend |
+| eureka-server | 8761 | Sí | Dashboard de registro de servicios |
+| fan-identity-service | 8081 | No | Solo accesible dentro de la red Docker / vía gateway |
+| match-ingestion-service | 8082 | No | Solo accesible dentro de la red Docker / vía gateway |
+| alert-dispatcher-service | 8083 | No | Solo accesible dentro de la red Docker / vía gateway |
+| PostgreSQL | 5432 | Sí | Base de `fan-identity-service` (DB: `fan_identity_db`) |
+| MongoDB | 27017 | Sí | Base de `match-ingestion-service` (DB: `match_ingestion_db`) |
+| Kafka | 9092 | Sí | Broker en modo KRaft. Listener interno para contenedores: `kafka:19092` |
+| Kafka UI | 8090 | Sí | Panel web de administración de tópicos y consumers |
 
-Para el detalle completo de configuración, variables de entorno y decisiones técnicas, ver [CLAUDE.md](CLAUDE.md).
+Todos los servicios corren en la red Docker `tp-nube-network` y se resuelven entre sí por nombre de contenedor.
+
+> Las credenciales de PostgreSQL están hardcodeadas en `docker-compose.yml` para simplificar el entorno local del TP. No usar esos valores fuera de este contexto académico.
+
+## Documentación
+
+Toda la documentación vive en [docs/](docs/):
+
+| Archivo | Contenido |
+|---|---|
+| [planificacion_global.md](docs/planificacion_global.md) | Planificación general y seguimiento del avance. **Punto de partida para trabajar.** |
+| [enunciado.md](docs/enunciado.md) | Enunciado original de la cátedra |
+| [resolucion_propuesta.md](docs/resolucion_propuesta.md) | Informe con la solución propuesta por el grupo, incluidos los mockups |
+| [explicacion_docker_compose.md](docs/explicacion_docker_compose.md) | Cómo funciona el `docker-compose.yml`, servicio por servicio |
+
+Convención de nombres dentro de `docs/`:
+
+- `planificacion_global.md` — planificación general y seguimiento.
+- `plan_*.md` — plan de implementación de una tarea concreta de la planificación global.
+- `explicacion_*.md` — material para entender el proyecto y las decisiones tomadas.
+- `assets/` — imágenes y mockups.

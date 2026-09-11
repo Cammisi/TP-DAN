@@ -1,106 +1,72 @@
-# ¿Quién Juega?
+# Instrucciones para la IA — ¿Quién Juega?
 
-Plataforma de seguimiento deportivo en tiempo real basada en microservicios Spring Boot, con descubrimiento de servicios (Eureka) y gateway único de entrada.
+Este archivo le dice a la IA **cómo trabajar** sobre este proyecto. No describe el dominio: eso está en el [README.md](README.md) (problema, alcance, arquitectura, roles, tecnologías, puertos, cómo levantar el stack). Leé el README primero si necesitás contexto del negocio.
 
-Trabajo práctico integrador — *Desarrollo de aplicaciones en la Nube*, UTN Santa Fe, 2026.
-Alumnos: Bautista Lazzarini, Bautista Luetich, Jose Cammisi.
+Es un **trabajo práctico académico** de tres estudiantes (UTN Santa Fe, *Desarrollo de aplicaciones en la Nube*). El objetivo es demostrar los conceptos de la materia con código que el grupo pueda explicar en un coloquio, no construir un sistema de producción.
 
-## Problema y propuesta
+## Metodología de trabajo
 
-Los fanáticos del deporte consumen información de múltiples fuentes (redes sociales, sitios de noticias), lo que dificulta el seguimiento personalizado de eventos en tiempo real. **¿Quién Juega?** centraliza eventos deportivos de distintos proveedores y permite a los usuarios configurar suscripciones personalizadas (equipos/ligas). El sistema procesa los eventos en tiempo real y, mediante mensajería asincrónica (Kafka), despacha alertas a los usuarios interesados según su perfil.
+Los tres integrantes trabajan en paralelo, cada uno con su IA, sobre el mismo repositorio. Para que eso no termine en tres estilos distintos de código, el flujo es siempre el mismo:
 
-**Alcance:**
-- Sí: registro/autenticación de usuarios, suscripción a equipos/ligas, despacho de notificaciones internas en la plataforma.
-- No: comunicación con sistemas externos que no sean proveedores de información (no hay integraciones salientes tipo email/push a terceros).
+1. **Se toma una tarea de [docs/planificacion_global.md](docs/planificacion_global.md).** Es el único lugar donde se decide qué se hace y en qué orden. La próxima tarea es la primera sin marcar (`- [ ] **T-`) cuyas dependencias ya estén cumplidas.
+2. **La IA genera `docs/plan_XX_<slug>.md`** con el plan de implementación de esa tarea (el número coincide con el ID: T-11 → `plan_11_auth_jwt.md`). El plan detalla archivos a tocar, endpoints, modelo de datos y pasos de verificación.
+3. **El integrante revisa y aprueba el plan.** Recién ahí la IA implementa.
+4. **Al terminar**, se marcan los checkboxes de la tarea en la planificación global, se actualiza la tabla de avance y se commitea.
 
-**Roles:**
-- **Fan** — se registra/inicia sesión, busca equipos/ligas en el catálogo, gestiona suscripciones (seguir/dejar de seguir), visualiza su historial de alertas.
-- **Administrador** — monitorea el estado de los microservicios (Eureka dashboard en `:8761` y Kafka UI en `:8090` ya cubren parte de esto a nivel infraestructura), simula la carga de un nuevo evento deportivo para disparar el flujo de punta a punta.
+Reglas que sostienen este flujo:
 
-## Responsabilidad de cada microservicio
+- **No implementes una tarea sin su `plan_*` aprobado**, salvo que el integrante lo pida explícitamente. Para tareas chicas y ya especificadas al detalle, preguntá si conviene saltear el paso.
+- **No inventes alcance.** Si algo hace falta y no está en la tarea, avisá y proponé agregarlo como tarea nueva a la planificación global en vez de hacerlo por las tuyas.
+- **Una tarea no se marca como terminada** hasta cumplir su criterio de *Terminada cuando*, verificado de verdad (ejecutando, no asumiendo).
+- **Si encontrás una inconsistencia o un bloqueo**, anotalo en la sección de riesgos de la planificación global.
 
-- **fan-identity-service** — ciclo de vida del usuario, perfiles y persistencia de suscripciones (relación muchos-a-muchos fan↔equipo). Emite y valida JWT (Spring Security). PostgreSQL porque la relación de suscripciones necesita integridad referencial y transaccionalidad.
-- **match-ingestion-service** — gateway de datos externos: ingesta resultados/eventos de partidos, valida el formato y los persiste para consulta histórica. MongoDB porque los eventos son heterogéneos (un "gol" en fútbol no tiene los mismos atributos que un "quiebre de servicio" en tenis) y un esquema de documentos flexible encaja mejor que uno relacional. Emite eventos a Kafka cada vez que detecta un evento relevante.
-- **alert-dispatcher-service** — consume los eventos de Kafka; por cada uno (ej. "Gol de Colón") consulta a `fan-identity-service` quiénes están suscritos y genera el registro de notificación. No tiene base de datos propia (principio de *Single Source of Truth*: los datos de fans viven solo en fan-identity-service) — el registro de notificación se persiste vía un callback HTTP a un endpoint interno de fan-identity-service (ver "Decisiones de arquitectura"). Esa consulta está protegida con **Circuit Breaker** (Resilience4j vía `spring-cloud-starter-circuitbreaker-resilience4j`): si fan-identity-service cae o tiene latencia alta, el circuito se abre para que alert-dispatcher-service no colapse esperando respuestas, en vez de eso aplica el fallback (ver más abajo).
+## Criterios de código
 
-### Scaffolding ya preparado para la llamada fan-identity-service ← alert-dispatcher-service
+El código lo tienen que poder leer y defender tres estudiantes en un coloquio. Priorizá eso sobre cualquier otra consideración.
 
-En `alert-dispatcher-service` (paquete `com.tpnube.alert_dispatcher_service`):
-- `client/FanIdentityClient.java` — cliente Feign (`@FeignClient(name = "fan-identity-service")`, resuelto vía Eureka + load balancer) contra `GET /api/fans/subscribers/{teamId}`. **El path es provisorio** — hay que alinearlo con el contrato real que exponga fan-identity-service.
-- `client/dto/FanSubscriberDTO.java` — DTO placeholder (`fanId`, `email`).
-- `service/FanIdentityLookupService.java` — envuelve la llamada Feign con `CircuitBreakerFactory.create("fanIdentityService").run(...)`. El fallback hoy devuelve lista vacía; queda un `TODO` para encolar el evento y reintentar en vez de descartarlo.
-- `config/CircuitBreakerConfiguration.java` — customiza el circuito por defecto (ventana de 10 llamadas, 50% de fallas para abrir, 15s en abierto, timeout de 3s por llamada).
-- Se agregó `spring-cloud-starter-openfeign` al `pom.xml` y `@EnableFeignClients` en `AlertDispatcherServiceApplication`.
+- **Simple antes que genérico.** Sin capas de abstracción, interfaces de un solo implementador, ni patrones que el TP no pida. Si una clase existe "por si mañana…", no va.
+- **Directo antes que clever.** Un `if` explícito es mejor que un stream anidado de tres niveles. El criterio es: ¿lo entiende un compañero en la primera lectura?
+- **Solo lo que la tarea pide.** Nada de features, endpoints, configuraciones ni optimizaciones que nadie pidió.
+- **Manejo de errores explícito y honesto.** Errores con mensaje claro y código HTTP correcto; nada de tragarse excepciones en silencio ni dejar `TODO` sin avisar.
+- **Comentarios en español, solo para el *por qué*.** Si el código ya dice *qué* hace, el comentario sobra. Comentá las decisiones no obvias (por qué este timeout, por qué este fallback).
+- **Escribí código que se parezca al que ya está.** Antes de crear algo nuevo, mirá cómo está resuelto lo equivalente en otro servicio.
 
-Importante: el pom usa `spring-cloud-starter-circuitbreaker-resilience4j` (la abstracción **Spring Cloud CircuitBreaker**, API programática vía `CircuitBreakerFactory`), no `resilience4j-spring-boot3`. Por eso el wiring usa `circuitBreakerFactory.create(...).run(...)` en vez de la anotación `@CircuitBreaker` — mezclar ambos estilos sin la dependencia correcta no compila.
+## Convenciones del proyecto
 
-## Decisiones de arquitectura
+- **Nombre del producto:** la plataforma se llama **¿Quién Juega?**. **FanAlert** es el nombre de la sección donde el fan recibe sus alertas (el centro de alertas), no el del producto — los mockups del informe lo usan como branding general, pero no es así.
+- **Paquetes:** `com.tpnube.<servicio_con_guiones_bajos>` (tal como los generó Spring Initializr: `com.tpnube.fan_identity_service`). No renombrarlos.
+- **Idioma:** nombres de clases, métodos y variables en inglés; comentarios y documentación en español.
+- **DTOs:** como `record` de Java (ver `FanSubscriberDTO`).
+- **Inyección de dependencias:** por constructor, escrito explícitamente, sin `@Autowired` en campos (ver `FanIdentityLookupService`).
+- **Configuración:** todo valor de entorno (URLs, puertos, credenciales, secretos) se lee de `application.yaml` con default para desarrollo local y se sobreescribe por variable de entorno en `docker-compose.yml`. Nunca hardcodeado en el código Java.
+- **Lombok:** disponible en `fan-identity-service` y `match-ingestion-service`. **No está en `alert-dispatcher-service` ni en los servicios de infraestructura** — ahí, o se escribe el boilerplate a mano, o se agrega la dependencia y se avisa.
 
-- **Persistencia del historial de alertas:** alert-dispatcher-service no tiene DB propia, pero necesita que el Fan pueda ver su historial de notificaciones. Se resuelve con un **callback HTTP**: después de resolver los suscriptos vía `FanIdentityLookupService`, alert-dispatcher-service hace un `POST` a un endpoint interno de fan-identity-service (a definir, ej. `POST /api/fans/{fanId}/notifications`) que persiste la notificación junto con los datos del fan. Mantiene la Single Source of Truth real (los datos de fans, incluido su historial, viven solo en fan-identity-service) en vez de duplicar estado en alert-dispatcher-service.
-- **Frontend:** `frontend-app` se construye con **Next.js** (Pages Router, según lo visto en la materia), consumiendo exclusivamente `cloud-gateway` en `:8080`. Se eligió sobre React+Vite plano porque hay un módulo dedicado de la materia y el ruteo basado en archivos simplifica separar las pantallas por rol (Fan/Admin).
+## Decisiones de arquitectura vigentes
 
-## Mapa del proyecto
+- **Historial de alertas vía callback HTTP.** `alert-dispatcher-service` no tiene base de datos propia. Después de resolver los suscriptos, hace un `POST` a un endpoint interno de `fan-identity-service` que persiste la notificación. Mantiene el Single Source of Truth real (los datos de fans, incluido su historial, viven solo en fan-identity-service) en vez de duplicar estado.
+- **Endpoints internos fuera de `/api/**`.** Los endpoints que consumen otros microservicios (suscriptores por equipo, alta de notificación) van bajo un prefijo que el gateway no rutea, así quedan inalcanzables desde el host por construcción.
+- **Frontend con Next.js (Pages Router)**, consumiendo exclusivamente `cloud-gateway` en `:8080`. Se eligió sobre React+Vite plano porque hay un módulo dedicado de la materia y el ruteo por archivos simplifica separar las pantallas por rol.
 
-```
-tp-nube-deportes/
-├── backend-app/
-│   ├── infrastructure/
-│   │   ├── eureka-server/      # Service Discovery — puerto 8761
-│   │   └── cloud-gateway/      # API Gateway (Spring Cloud Gateway MVC) — puerto 8080
-│   └── microservices/
-│       ├── fan-identity-service/       # Identidad de hinchas — puerto 8081 — PostgreSQL
-│       ├── match-ingestion-service/    # Ingesta de partidos — puerto 8082 — MongoDB + Kafka
-│       └── alert-dispatcher-service/   # Despacho de alertas — puerto 8083 — Kafka
-├── frontend-app/                             # Cliente que consume exclusivamente el gateway (puerto 8080)
-├── docker-compose.yml
-└── CLAUDE.md
-```
+Hay **decisiones todavía abiertas** (dueño del catálogo de equipos, dónde se valida el JWT, stack de observabilidad, rol admin) en la sección 2 de la [planificación global](docs/planificacion_global.md). Si una tarea depende de alguna, confirmala con el integrante antes de implementar.
 
-## Puertos asignados
+## Gotchas técnicos
 
-| Servicio                   | Puerto host | Expuesto a host | Notas |
-|-----------------------------|:-----------:|:---:|-------|
-| cloud-gateway                | 8080 | Sí  | Único puerto que debe consumir `frontend-app` |
-| eureka-server                | 8761 | Sí  | Dashboard de registro de servicios |
-| fan-identity-service          | 8081 | No  | Solo accesible dentro de la red Docker / vía gateway |
-| match-ingestion-service       | 8082 | No  | Solo accesible dentro de la red Docker / vía gateway |
-| alert-dispatcher-service      | 8083 | No  | Solo accesible dentro de la red Docker / vía gateway |
-| PostgreSQL (fan-identity)     | 5432 | Sí  | DB: `fan_identity_db` |
-| MongoDB (match-ingestion)     | 27017 | Sí | DB: `match_ingestion_db` |
-| Kafka                          | 9092 | Sí  | Broker en modo KRaft (sin ZooKeeper). Listener interno para los contenedores: `kafka:19092` |
-| Kafka UI                       | 8090 | Sí  | Panel web de administración de tópicos/consumers (`provectuslabs/kafka-ui`) |
+Cosas que ya costaron tiempo o que pueden romper de formas poco obvias:
 
-Todos los servicios corren en la red Docker `tp-nube-network` y se resuelven entre sí por nombre de contenedor (`eureka-server`, `postgres`, `mongo`, `kafka`, etc.).
+- **Circuit Breaker: una sola API.** El `pom` usa `spring-cloud-starter-circuitbreaker-resilience4j` (abstracción **Spring Cloud CircuitBreaker**, API programática vía `CircuitBreakerFactory`), no `resilience4j-spring-boot3`. Por eso el wiring es `circuitBreakerFactory.create(...).run(...)` y **no** la anotación `@CircuitBreaker`: mezclar ambos estilos sin la dependencia correcta no compila.
+- **El path del Feign client es provisorio.** `FanIdentityClient` apunta a `GET /api/fans/subscribers/{teamId}`, un path inventado antes de que existiera el contrato. Hay que alinearlo con lo que defina la tarea T-01.
+- **Stack muy reciente.** Spring Boot 4.1 + Java 25 + Spring Cloud 2025.1.2. Varios starters cambiaron de nombre respecto de Boot 3 (`spring-boot-starter-web` → `spring-boot-starter-webmvc`, `spring-kafka` → `spring-boot-starter-kafka`, starters de test separados por módulo). Ante la duda, verificá contra el `pom` de un servicio que ya funcione, no contra la memoria de cómo era en Boot 3.
+- **Spring Cloud Gateway Server WebMVC.** El prefijo `spring.cloud.gateway.server.webmvc.routes` en `cloud-gateway/application.yaml` corresponde al artifact `spring-cloud-starter-gateway-server-webmvc` de Spring Cloud 2025.1.2. Es un módulo nuevo: confirmá el namespace contra la documentación de esa versión exacta si las rutas no levantan.
+- **Kafka en modo KRaft, dos listeners.** `kafka:19092` para tráfico entre contenedores (el que usan los microservicios vía `SPRING_KAFKA_BOOTSTRAPSERVERS`) y `localhost:9092` para herramientas del host. Los tópicos conviene declararlos explícitamente con beans `NewTopic` en vez de depender de la auto-creación del broker.
+- **Healthchecks sin Actuator.** Hoy solo `cloud-gateway` tiene `spring-boot-starter-actuator`; los healthchecks de los demás en `docker-compose.yml` son un chequeo TCP (`/dev/tcp` vía `bash`) contra el puerto, no un `GET /actuator/health`. Reflejan si el puerto está abierto, no si la app funciona.
+- **Spring Security sin configurar protege todo.** `fan-identity-service` tiene el starter de security en el `pom` pero ninguna `SecurityFilterChain`: al arrancar aplica basic auth con una contraseña random en el log, así que cualquier request vía gateway devuelve 401 hasta que se configure.
 
-## Comandos Docker
+## Qué no hacer
 
-Desde la raíz del repositorio:
-
-```bash
-# Compilar todas las imágenes (Maven multi-stage) y levantar el stack completo
-docker compose up --build
-
-# Levantar en segundo plano
-docker compose up --build -d
-
-# Reconstruir un único servicio
-docker compose up --build fan-identity-service
-
-# Ver logs de un servicio
-docker compose logs -f cloud-gateway
-
-# Apagar y limpiar contenedores (conserva los volúmenes de datos)
-docker compose down
-
-# Apagar y borrar también los volúmenes (reset completo de datos)
-docker compose down -v
-```
-
-El orden de arranque está gobernado por `depends_on` con `condition: service_healthy`: las bases de datos y Kafka deben pasar su healthcheck antes de que arranquen los microservicios correspondientes, y `eureka-server` debe estar saludable antes que cualquier cliente Eureka (los 3 microservicios y `cloud-gateway`). `cloud-gateway` además espera a que los 3 microservicios estén saludables antes de levantar.
-
-## Puntos a verificar antes de la entrega
-
-- **Kafka en modo KRaft:** el broker corre sin ZooKeeper (`apache/kafka:3.9.0`, un solo nodo cumpliendo roles `broker,controller`). Tiene dos listeners: `kafka:19092` para tráfico interno entre contenedores (el que deben usar `match-ingestion-service` y `alert-dispatcher-service` vía `SPRING_KAFKA_BOOTSTRAPSERVERS`) y `localhost:9092` para herramientas externas al host. Los tópicos no se crean automáticamente salvo que el broker tenga auto-creación habilitada (por defecto sí la tiene) o que el código los declare explícitamente con `NewTopic` beans.
-- **Spring Cloud Gateway Server WebMVC:** el prefijo de propiedades usado en `cloud-gateway/application.yaml` (`spring.cloud.gateway.server.webmvc.routes`) corresponde al artifact `spring-cloud-starter-gateway-server-webmvc` de Spring Cloud 2025.1.2. Es un módulo muy reciente — conviene correr `mvn spring-boot:run` una vez y confirmar contra la documentación de esa versión exacta que el namespace de propiedades no cambió.
-- **Healthchecks sin Actuator:** `eureka-server`, `fan-identity-service`, `match-ingestion-service` y `alert-dispatcher-service` no tienen `spring-boot-starter-actuator` en su `pom.xml`, así que sus healthchecks en `docker-compose.yml` son un chequeo TCP simple (`/dev/tcp` vía `bash`) contra el puerto de la app, no un `GET /actuator/health`. Si se agrega Actuator más adelante, conviene migrar los healthchecks a HTTP para que reflejen el estado real de la app (DB, Kafka, etc.) y no solo si el puerto está abierto.
-- **Credenciales en claro:** las credenciales de Postgres están hardcodeadas en `docker-compose.yml` para simplificar el entorno local del TP (Kafka no requiere autenticación en este setup local sin seguridad SASL/SSL). No usar estos valores fuera de este contexto académico.
+- **No agregues dependencias** al `pom.xml` o al `package.json` sin justificar por qué hacen falta y avisarlo.
+- **No inventes endpoints** fuera del contrato definido en `docs/explicacion_contratos_api.md` (tarea T-01). Si falta uno, proponelo, no lo agregues por tu cuenta.
+- **No toques `docker-compose.yml`** sin actualizar también `docs/explicacion_docker_compose.md`.
+- **No metas secretos en el código ni en el repositorio.** Las credenciales de Postgres ya hardcodeadas en `docker-compose.yml` son una simplificación deliberada del entorno local; no repliques ese patrón en código Java ni agregues secretos nuevos.
+- **No loguees contraseñas, tokens ni datos personales.**
+- **No marques una tarea como terminada sin verificarla ejecutando.** Si no la pudiste probar, decilo.
+- **No reescribas código que funciona** para "mejorarlo" si la tarea no lo pide.
