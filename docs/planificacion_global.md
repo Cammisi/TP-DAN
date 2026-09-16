@@ -94,6 +94,7 @@ Huecos que ni el enunciado ni la resolución propuesta resolvían. **Las seis es
 - [ ] **R-4 · `fan-identity-service` tiene `spring-boot-starter-security` sin configurar.** Al arrancar, Spring Security protege todo con basic auth y una contraseña random en el log: cualquier request vía gateway daría 401. Se corrige en T-11.
 - [ ] **R-5 · El path del Feign client es provisorio** (`GET /api/fans/subscribers/{teamId}`). Se congela en T-01.
 - [ ] **R-6 · Actuator solo está en `cloud-gateway`**, y los healthchecks de Docker son TCP contra el puerto. Se corrige en T-50.
+- [ ] **R-7 · Nadie valida el rol admin en `POST /api/matches/{matchId}/events`.** Por D-2 el gateway solo valida firma/autenticación (no rol), y `match-ingestion-service` no tiene Spring Security propio porque no está expuesto al host. Con el contrato de T-01, un fan autenticado (no admin) podría llamar a este endpoint vía gateway. Se resuelve en T-40: el filtro del gateway debe chequear el claim `role` para esta ruta puntual, o se documenta como limitación aceptada.
 
 ---
 
@@ -149,20 +150,20 @@ La Fase 0 y la Fase 2 se hacen **juntos**: definen contratos y tocan puntos de i
     - [x] Mockups movidos a `docs/assets/` con nombres descriptivos y enlaces de `resolucion_propuesta.md` actualizados.
   - **Terminada cuando:** un integrante que no escribió los docs puede leer solo el README y levantar el proyecto, y CLAUDE.md no repite nada que ya esté en el README.
 
-- [ ] **T-01 · Congelar el contrato de APIs y el esquema del evento Kafka** — transversal · depende de: — (D-1 a D-6 ya resueltas) · todos
+- [x] **T-01 · Congelar el contrato de APIs y el esquema del evento Kafka** — transversal · depende de: — (D-1 a D-6 ya resueltas) · todos · [plan](plan_01_contratos_api.md) · [contrato](explicacion_contratos_api.md)
   - **Qué:** escribir `docs/explicacion_contratos_api.md` con **todos** los endpoints (método, path, request, response, códigos de error, si es público/autenticado/interno) y el JSON del evento que viaja por Kafka, incluyendo nombre del tópico y clave de partición.
   - **Por qué:** es lo único que permite que los tres carriles avancen en paralelo sin pisarse. Sin esto, el frontend no sabe qué consumir y alert-dispatcher no sabe qué pedirle a fan-identity (hoy el Feign client apunta a un path inventado, R-5).
   - **Afecta:** ningún código todavía; condiciona todas las tareas de Fase 1 y 4.
   - **Requisitos:**
-    - [ ] Endpoints públicos de auth (`/api/fans/auth/**`).
-    - [ ] Endpoints del fan autenticado: suscripciones y notificaciones.
-    - [ ] Endpoint de suscriptores por equipo que consume alert-dispatcher (reemplaza el path provisorio).
-    - [ ] Endpoint interno de persistencia de notificación (callback de D-3), bajo un prefijo **fuera** de `/api/**` para que el gateway no lo exponga.
-    - [ ] Catálogo de ligas y equipos en `fan-identity-service`, bajo `/api/catalog/**` (por D-1).
-    - [ ] Consulta de partidos y eventos en `match-ingestion-service`.
-    - [ ] Endpoint de ingesta de eventos (el que usa el admin para simular).
-    - [ ] Esquema del evento Kafka: nombre del tópico, campos, tipos, ejemplo completo.
-    - [ ] Formato único de error para todos los servicios.
+    - [x] Endpoints públicos de auth (`/api/fans/auth/**`).
+    - [x] Endpoints del fan autenticado: suscripciones y notificaciones.
+    - [x] Endpoint de suscriptores por equipo que consume alert-dispatcher (reemplaza el path provisorio).
+    - [x] Endpoint interno de persistencia de notificación (callback de D-3), bajo un prefijo **fuera** de `/api/**` para que el gateway no lo exponga.
+    - [x] Catálogo de ligas y equipos en `fan-identity-service`, bajo `/api/catalog/**` (por D-1).
+    - [x] Consulta de partidos y eventos en `match-ingestion-service`.
+    - [x] Endpoint de ingesta de eventos (el que usa el admin para simular).
+    - [x] Esquema del evento Kafka: nombre del tópico, campos, tipos, ejemplo completo.
+    - [x] Formato único de error para todos los servicios.
   - **Terminada cuando:** cada carril puede implementar su parte sin preguntarle nada a los otros dos.
 
 - [ ] **T-02 · Configuración base ejecutable y prueba de humo del stack** — los 5 servicios Spring · depende de: — · todos
@@ -483,12 +484,12 @@ La Fase 0 y la Fase 2 se hacen **juntos**: definen contratos y tocan puntos de i
 
 | Fase | Tareas | Completadas |
 |---|---|---|
-| 0 — Cimientos | 3 | 1 |
+| 0 — Cimientos | 3 | 2 |
 | 1 — Núcleo de dominio | 12 | 0 |
 | 2 — Integración y seguridad | 3 | 0 |
 | 3 — Requisitos transversales | 2 | 0 |
 | 4 — Frontend | 6 | 0 |
 | 5 — Cierre y entrega | 4 | 0 |
-| **Total** | **30** | **1** |
+| **Total** | **30** | **2** |
 
 Actualizar esta tabla al cerrar cada tarea.
