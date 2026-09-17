@@ -208,17 +208,17 @@ La Fase 0 y la Fase 2 se hacen **juntos**: definen contratos y tocan puntos de i
     - [x] La clave de firma se lee de configuración (variable de entorno), con default solo para desarrollo local.
   - **Terminada cuando:** se puede registrar un fan, loguearlo, obtener un JWT y usarlo para acceder a un endpoint protegido del servicio. ✅ Verificado con endpoints en ejecución a través del gateway (2026-09-17).
 
-- [ ] **T-12 · Suscripciones del fan** — `fan-identity-service` · depende de: T-11 · carril A
+- [x] **T-12 · Suscripciones del fan** — `fan-identity-service` · depende de: T-11 · carril A · [plan](plan_12_suscripciones_fan.md)
   - **Qué:** seguir un equipo, dejar de seguirlo y listar las suscripciones del fan autenticado.
   - **Por qué:** es la funcionalidad central del rol Fan (punto 3.2) y lo que alimenta el fan-out de alertas.
   - **Afecta:** `.../fan_identity_service/` (subscription).
   - **Requisitos:**
-    - [ ] Los tres endpoints operan **siempre** sobre el fan del JWT, nunca sobre un id que venga en el body.
-    - [ ] Seguir dos veces el mismo equipo no duplica ni falla con error 500.
-    - [ ] Seguir un equipo inexistente se rechaza con un error claro (la FK a `Team` lo garantiza).
-    - [ ] Dejar de seguir algo no suscripto devuelve un código coherente, no una excepción.
-    - [ ] El listado devuelve el nombre del equipo y su liga, resueltos por join (sin desnormalizar).
-  - **Terminada cuando:** con un JWT válido se puede seguir, listar y dejar de seguir equipos, y los cambios persisten tras reiniciar el servicio.
+    - [x] Los tres endpoints operan **siempre** sobre el fan del JWT, nunca sobre un id que venga en el body.
+    - [x] Seguir dos veces el mismo equipo no duplica ni falla con error 500.
+    - [x] Seguir un equipo inexistente se rechaza con un error claro (la FK a `Team` lo garantiza).
+    - [x] Dejar de seguir algo no suscripto devuelve un código coherente, no una excepción.
+    - [x] El listado devuelve el nombre del equipo y su liga, resueltos por join (sin desnormalizar).
+  - **Terminada cuando:** con un JWT válido se puede seguir, listar y dejar de seguir equipos, y los cambios persisten tras reiniciar el servicio. ✅ Verificado en ejecución en Docker (2026-09-17).
 
 - [ ] **T-13 · Endpoint de suscriptores por equipo** — `fan-identity-service` · depende de: T-12 · carril A
   - **Qué:** el endpoint que consume `alert-dispatcher-service` para saber a quién notificar, según el contrato de T-01.
@@ -485,11 +485,11 @@ La Fase 0 y la Fase 2 se hacen **juntos**: definen contratos y tocan puntos de i
 | Fase | Tareas | Completadas |
 |---|---|---|
 | 0 — Cimientos | 3 | 3 |
-| 1 — Núcleo de dominio | 12 | 2 |
+| 1 — Núcleo de dominio | 12 | 3 |
 | 2 — Integración y seguridad | 3 | 0 |
 | 3 — Requisitos transversales | 2 | 0 |
 | 4 — Frontend | 6 | 0 |
 | 5 — Cierre y entrega | 4 | 0 |
-| **Total** | **30** | **5** |
+| **Total** | **30** | **6** |
 
 Actualizar esta tabla al cerrar cada tarea.
