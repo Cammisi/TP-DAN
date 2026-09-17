@@ -1,10 +1,16 @@
 package com.tpnube.fan_identity_service.controller;
 
+import com.tpnube.fan_identity_service.dto.NotificationCreatedDTO;
+import com.tpnube.fan_identity_service.dto.NotificationRequestDTO;
 import com.tpnube.fan_identity_service.dto.SubscriberDTO;
+import com.tpnube.fan_identity_service.service.NotificationService;
 import com.tpnube.fan_identity_service.service.SubscriptionService;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -17,14 +23,26 @@ import java.util.List;
 public class InternalFanController {
 
     private final SubscriptionService subscriptionService;
+    private final NotificationService notificationService;
 
-    public InternalFanController(SubscriptionService subscriptionService) {
+    public InternalFanController(SubscriptionService subscriptionService,
+                                  NotificationService notificationService) {
         this.subscriptionService = subscriptionService;
+        this.notificationService = notificationService;
     }
 
     @GetMapping("/subscribers/{teamId}")
     public ResponseEntity<List<SubscriberDTO>> getSubscribers(@PathVariable String teamId) {
         List<SubscriberDTO> subscribers = subscriptionService.getSubscribers(teamId);
         return ResponseEntity.ok(subscribers);
+    }
+
+    @PostMapping("/notifications")
+    public ResponseEntity<NotificationCreatedDTO> createNotification(@RequestBody NotificationRequestDTO request) {
+        Long fanId = Long.parseLong(request.fanId());
+        Long notificationId = notificationService.createNotification(
+                fanId, request.eventId(), request.matchId(), request.teamId(),
+                request.message(), request.occurredAt());
+        return ResponseEntity.status(HttpStatus.CREATED).body(new NotificationCreatedDTO(notificationId.toString()));
     }
 }

@@ -230,15 +230,15 @@ La Fase 0 y la Fase 2 se hacen **juntos**: definen contratos y tocan puntos de i
     - [x] Queda fuera del prefijo que el gateway expone (no alcanzable desde el host).
   - **Terminada cuando:** `alert-dispatcher-service` obtiene la lista real vía Feign dentro de la red Docker y el contrato coincide con `FanSubscriberDTO`. ✅ Verificado 2026-09-17: `GET /internal/fans/subscribers/team-colon` (con un fan suscripto) devuelve `[{"fanId":"2","email":"fan1@quienjuega.com"}]`; `team-union` (sin suscriptores) devuelve `[]`; `GET http://localhost:8080/internal/fans/subscribers/team-colon` desde el host da `404` (el gateway no rutea `/internal/**`). De paso se corrigió un problema real de infra: el healthcheck de `kafka` tenía `timeout: 5s` pero el comando tarda ~7s en responder, dejándolo `unhealthy` siempre y bloqueando a `alert-dispatcher-service`/`match-ingestion-service` (ver gotcha en `CLAUDE.md`, ahora `timeout: 12s`).
 
-- [ ] **T-14 · Historial de notificaciones** — `fan-identity-service` · depende de: T-12 · carril A
+- [x] **T-14 · Historial de notificaciones** — `fan-identity-service` · depende de: T-12 · carril A · [plan](plan_14_historial_notificaciones.md)
   - **Qué:** entidad `Notification`, endpoint **interno** de alta (el callback de D-3) y endpoint del fan para listar su historial.
   - **Por qué:** el Fan tiene que poder ver su historial de alertas y alert-dispatcher no tiene base propia.
   - **Afecta:** `.../fan_identity_service/` (notification).
   - **Requisitos:**
-    - [ ] `Notification` guarda a qué fan pertenece, el texto, el evento que la originó y la fecha.
-    - [ ] Alta interna, fuera del prefijo público del gateway.
-    - [ ] El listado devuelve solo las notificaciones del fan del JWT, ordenadas de más nueva a más vieja.
-  - **Terminada cuando:** insertando una notificación por el endpoint interno, el fan la ve en su historial.
+    - [x] `Notification` guarda a qué fan pertenece, el texto, el evento que la originó y la fecha.
+    - [x] Alta interna, fuera del prefijo público del gateway.
+    - [x] El listado devuelve solo las notificaciones del fan del JWT, ordenadas de más nueva a más vieja.
+  - **Terminada cuando:** insertando una notificación por el endpoint interno, el fan la ve en su historial. ✅ Verificado en ejecución en Docker (2026-09-17): `POST /internal/fans/notifications` (dentro de la red, sin curl en los contenedores de la app, se usó un contenedor `curlimages/curl` efímero en `tp-deportes-nube_tp-nube-network`) devuelve `201` con `{"id":...}`; `GET /api/fans/me/notifications` vía gateway con el JWT de ese fan muestra ambas notificaciones ordenadas de más nueva a más vieja; un `fanId` inexistente devuelve `404 FAN_NOT_FOUND`; y `POST http://localhost:8080/internal/fans/notifications` desde el host da `404` propio del gateway (ruta no declarada), igual que en T-13.
 
 - [ ] **T-15 · Endpoints de catálogo de ligas y equipos** — `fan-identity-service`, `cloud-gateway` · depende de: T-10, T-11 · carril A
   - **Qué:** endpoints de lectura para listar ligas y buscar equipos por nombre, más la ruta `/api/catalog/**` en el gateway.
@@ -485,11 +485,11 @@ La Fase 0 y la Fase 2 se hacen **juntos**: definen contratos y tocan puntos de i
 | Fase | Tareas | Completadas |
 |---|---|---|
 | 0 — Cimientos | 3 | 3 |
-| 1 — Núcleo de dominio | 12 | 4 |
+| 1 — Núcleo de dominio | 12 | 5 |
 | 2 — Integración y seguridad | 3 | 0 |
 | 3 — Requisitos transversales | 2 | 0 |
 | 4 — Frontend | 6 | 0 |
 | 5 — Cierre y entrega | 4 | 0 |
-| **Total** | **30** | **7** |
+| **Total** | **30** | **8** |
 
 Actualizar esta tabla al cerrar cada tarea.

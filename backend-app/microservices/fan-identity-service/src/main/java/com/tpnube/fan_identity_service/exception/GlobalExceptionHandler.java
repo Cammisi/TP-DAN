@@ -37,6 +37,12 @@ public class GlobalExceptionHandler {
         return buildError(HttpStatus.NOT_FOUND, "TEAM_NOT_FOUND", ex.getMessage(), request);
     }
 
+    @ExceptionHandler(com.tpnube.fan_identity_service.service.NotificationService.FanNotFoundException.class)
+    public ResponseEntity<ErrorResponseDTO> handleFanNotFound(
+            com.tpnube.fan_identity_service.service.NotificationService.FanNotFoundException ex, HttpServletRequest request) {
+        return buildError(HttpStatus.NOT_FOUND, "FAN_NOT_FOUND", ex.getMessage(), request);
+    }
+
     private ResponseEntity<ErrorResponseDTO> buildError(
             HttpStatus status, String error, String message, HttpServletRequest request) {
         ErrorResponseDTO body = new ErrorResponseDTO(
