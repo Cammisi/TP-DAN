@@ -7,6 +7,8 @@ import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.http.HttpStatus;
+import org.springframework.security.web.authentication.HttpStatusEntryPoint;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
@@ -18,8 +20,11 @@ public class SecurityConfig {
                                                     JwtAuthenticationFilter jwtFilter) throws Exception {
         http.csrf(csrf -> csrf.disable())
             .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+            .exceptionHandling(ex -> ex
+                .authenticationEntryPoint(new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED))
+            )
             .authorizeHttpRequests(auth -> auth
-                .requestMatchers("/api/fans/auth/**").permitAll()
+                .requestMatchers("/api/fans/auth/**", "/error").permitAll()
                 // Los endpoints internos se protegen en T-41; por ahora se dejan accesibles
                 // dentro de la red Docker (el gateway no los rutea, así que no llegan desde el host).
                 .requestMatchers("/internal/**").permitAll()

@@ -40,7 +40,7 @@ Estado del código backend. Todavía no se escribió lógica de negocio: los com
 | Mensajería asincrónica | 🔴 | T-23, T-30 |
 | Spring Cloud Gateway + Eureka | ✅ | T-02 (verificado) |
 | Ejecución en contenedores Docker | ✅ | T-02 (verificado) |
-| Seguridad | 🔴 | T-11, T-40, T-41 |
+| Seguridad | 🟡 | T-11 (hecho), T-40, T-41 |
 | Almacén centralizado de logs | 🔴 | T-51 |
 | Telemetría de métricas de rendimiento | 🔴 | T-50 |
 | 1 característica extra (Resilience4J) | 🟡 | T-31 |
@@ -91,7 +91,7 @@ Huecos que ni el enunciado ni la resolución propuesta resolvían. **Las seis es
 - [x] **R-1 · Stack muy reciente sin evidencia de que arranque:** Spring Boot 4.1 + Java 25 + Spring Cloud 2025.1.2 + `spring-cloud-starter-gateway-server-webmvc`. Resuelto en T-02 (2026-09-17): `docker compose up --build` levanta los 9 contenedores `healthy`. Único ajuste necesario: `@EnableEurekaServer` faltante en `eureka-server`.
 - [ ] **R-2 · `frontend-app/` todavía no existe.** Es uno de los componentes que exige el enunciado y quedó al final del plan. Conviene arrancar T-60 en paralelo con la Fase 1 para no dejarlo para la última semana.
 - [ ] **R-3 · Los `application.yaml` de los 3 microservicios estaban casi vacíos** (solo `spring.application.name`). Se completaron con defaults locales en T-02 (puerto, Eureka, datasource/Mongo/Kafka apuntando a `localhost`). **Falta verificar** que `mvn spring-boot:run` funcione contra esos defaults: esta máquina no tiene Maven ni JDK 25 instalados, solo se probó vía Docker.
-- [ ] **R-4 · `fan-identity-service` tiene `spring-boot-starter-security` sin configurar.** Al arrancar, Spring Security protege todo con basic auth y una contraseña random en el log: cualquier request vía gateway daría 401. Se corrige en T-11.
+- [x] **R-4 · `fan-identity-service` tiene `spring-boot-starter-security` sin configurar.** Resuelto en T-11: `SecurityConfig` configurado con `JwtAuthenticationFilter`, rutas públicas (`/api/fans/auth/**`), rutas protegidas con JWT y contraseñas hasheadas con BCrypt.
 - [ ] **R-5 · El path del Feign client es provisorio** (`GET /api/fans/subscribers/{teamId}`). Se congela en T-01.
 - [ ] **R-6 · Actuator solo está en `cloud-gateway`**, y los healthchecks de Docker son TCP contra el puerto. Se corrige en T-50.
 - [ ] **R-7 · Nadie valida el rol admin en `POST /api/matches/{matchId}/events`.** Por D-2 el gateway solo valida firma/autenticación (no rol), y `match-ingestion-service` no tiene Spring Security propio porque no está expuesto al host. Con el contrato de T-01, un fan autenticado (no admin) podría llamar a este endpoint vía gateway. Se resuelve en T-40: el filtro del gateway debe chequear el claim `role` para esta ruta puntual, o se documenta como limitación aceptada.
@@ -183,30 +183,30 @@ La Fase 0 y la Fase 2 se hacen **juntos**: definen contratos y tocan puntos de i
 
 #### Carril A — `fan-identity-service`
 
-- [ ] **T-10 · Modelo de datos, catálogo y persistencia** — `fan-identity-service` · depende de: T-01, T-02 · carril A
+- [x] **T-10 · Modelo de datos, catálogo y persistencia** — `fan-identity-service` · depende de: T-01, T-02 · carril A
   - **Qué:** entidades JPA `Fan`, `Subscription`, `League` y `Team` (+ rol, según D-5), repositorios y datos semilla (ligas y equipos reales, algunos fans y un admin).
   - **Por qué:** es la base de todo el carril A. Por D-1 el catálogo deportivo vive acá, así que la suscripción puede tener FK real al equipo: es la justificación de haber elegido PostgreSQL.
   - **Afecta:** `.../fan_identity_service/` (paquetes de dominio y repositorio), `application.yaml`.
   - **Requisitos:**
-    - [ ] `Fan` con email único, contraseña hasheada (BCrypt) y rol.
-    - [ ] `League` y `Team`, con `Team` perteneciendo a una `League`.
-    - [ ] `Subscription` con FK a `Fan` y a `Team`, y restricción de unicidad para no duplicar suscripciones.
-    - [ ] El identificador de `Team` es el mismo `teamId` que viaja en los eventos de Kafka y que guarda `match-ingestion-service`.
-    - [ ] Datos semilla cargados al arrancar, idempotentes (no duplican al reiniciar).
-    - [ ] Las tablas se crean solas contra el Postgres del compose.
-  - **Terminada cuando:** el servicio arranca contra Postgres, crea el esquema y los datos semilla (ligas, equipos, fans, admin) se ven consultando la base.
+    - [x] `Fan` con email único, contraseña hasheada (BCrypt) y rol.
+    - [x] `League` y `Team`, con `Team` perteneciendo a una `League`.
+    - [x] `Subscription` con FK a `Fan` y a `Team`, y restricción de unicidad para no duplicar suscripciones.
+    - [x] El identificador de `Team` es el mismo `teamId` que viaja en los eventos de Kafka y que guarda `match-ingestion-service`.
+    - [x] Datos semilla cargados al arrancar, idempotentes (no duplican al reiniciar).
+    - [x] Las tablas se crean solas contra el Postgres del compose.
+  - **Terminada cuando:** el servicio arranca contra Postgres, crea el esquema y los datos semilla (ligas, equipos, fans, admin) se ven consultando la base. ✅ Verificado en ejecución en Docker (2026-09-17).
 
-- [ ] **T-11 · Registro, login y emisión de JWT** — `fan-identity-service` · depende de: T-10 · carril A
+- [x] **T-11 · Registro, login y emisión de JWT** — `fan-identity-service` · depende de: T-10 · carril A
   - **Qué:** endpoints públicos de registro y login, hash de contraseñas, emisión de JWT firmado, y la `SecurityFilterChain` del servicio.
   - **Por qué:** cubre el requisito obligatorio de seguridad y el punto 3.1 de la resolución. Además desactiva el basic auth por defecto que hoy rompería todo (R-4).
   - **Afecta:** `.../fan_identity_service/` (auth, security, config).
   - **Requisitos:**
-    - [ ] Registro valida email único y devuelve error claro si ya existe.
-    - [ ] Login devuelve JWT con el id del fan y su rol en los claims.
-    - [ ] Contraseñas hasheadas con BCrypt, nunca en texto plano ni en logs.
-    - [ ] Rutas de auth públicas, el resto autenticado.
-    - [ ] La clave de firma se lee de configuración (variable de entorno), con default solo para desarrollo local.
-  - **Terminada cuando:** se puede registrar un fan, loguearlo, obtener un JWT y usarlo para acceder a un endpoint protegido del servicio.
+    - [x] Registro valida email único y devuelve error claro si ya existe.
+    - [x] Login devuelve JWT con el id del fan y su rol en los claims.
+    - [x] Contraseñas hasheadas con BCrypt, nunca en texto plano ni en logs.
+    - [x] Rutas de auth públicas, el resto autenticado.
+    - [x] La clave de firma se lee de configuración (variable de entorno), con default solo para desarrollo local.
+  - **Terminada cuando:** se puede registrar un fan, loguearlo, obtener un JWT y usarlo para acceder a un endpoint protegido del servicio. ✅ Verificado con endpoints en ejecución a través del gateway (2026-09-17).
 
 - [ ] **T-12 · Suscripciones del fan** — `fan-identity-service` · depende de: T-11 · carril A
   - **Qué:** seguir un equipo, dejar de seguirlo y listar las suscripciones del fan autenticado.
@@ -485,11 +485,11 @@ La Fase 0 y la Fase 2 se hacen **juntos**: definen contratos y tocan puntos de i
 | Fase | Tareas | Completadas |
 |---|---|---|
 | 0 — Cimientos | 3 | 3 |
-| 1 — Núcleo de dominio | 12 | 0 |
+| 1 — Núcleo de dominio | 12 | 2 |
 | 2 — Integración y seguridad | 3 | 0 |
 | 3 — Requisitos transversales | 2 | 0 |
 | 4 — Frontend | 6 | 0 |
 | 5 — Cierre y entrega | 4 | 0 |
-| **Total** | **30** | **3** |
+| **Total** | **30** | **5** |
 
 Actualizar esta tabla al cerrar cada tarea.
