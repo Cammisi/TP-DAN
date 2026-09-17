@@ -18,4 +18,7 @@ public interface SubscriptionRepository extends JpaRepository<Subscription, Long
 
     @Query("SELECT s FROM Subscription s JOIN FETCH s.team t JOIN FETCH t.league l WHERE s.fan.id = :fanId")
     List<Subscription> findAllByFanIdWithTeamAndLeague(@Param("fanId") Long fanId);
+
+    @Query("SELECT s FROM Subscription s JOIN FETCH s.fan WHERE s.team.id = :teamId")
+    List<Subscription> findAllByTeamIdWithFan(@Param("teamId") String teamId);
 }

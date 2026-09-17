@@ -335,6 +335,8 @@ Todos los servicios tienen un bloque `healthcheck`. Esto le dice a Docker **cóm
 
 Esto es clave porque los `depends_on` con `condition: service_healthy` usan estos healthchecks para **no iniciar un servicio hasta que sus dependencias estén realmente listas**.
 
+**Caso particular — `kafka` con `timeout: 12s`:** el resto de los servicios usan `5s`, pero el comando que chequea a Kafka (`kafka-broker-api-versions.sh`) levanta su propia JVM cliente para consultar al broker, y eso solo tarda unos ~7 segundos. Con `5s` el healthcheck fallaba siempre (no por falta de recursos de la máquina, el comando corriendo a mano tarda lo mismo), así que `kafka` quedaba `unhealthy` de forma permanente y bloqueaba a `alert-dispatcher-service` y `match-ingestion-service` (que dependen de que esté `healthy` para arrancar).
+
 ---
 
 ## 🚀 Comandos útiles

@@ -66,6 +66,7 @@ Cosas que ya costaron tiempo o que pueden romper de formas poco obvias:
 - **Healthchecks sin Actuator.** Hoy solo `cloud-gateway` tiene `spring-boot-starter-actuator`; los healthchecks de los demás en `docker-compose.yml` son un chequeo TCP (`/dev/tcp` vía `bash`) contra el puerto, no un `GET /actuator/health`. Reflejan si el puerto está abierto, no si la app funciona.
 - **Spring Security sin configurar protege todo.** `fan-identity-service` tiene el starter de security en el `pom` pero ninguna `SecurityFilterChain`: al arrancar aplica basic auth con una contraseña random en el log, así que cualquier request vía gateway devuelve 401 hasta que se configure.
 - **`eureka-server` necesita `@EnableEurekaServer` en la clase principal.** Sin ella, `spring-cloud-starter-netflix-eureka-server` no activa su auto-configuración de servidor y el arranque falla con `NoSuchBeanDefinitionException: TransportClientFactories` al intentar auto-registrarse como cliente. Se detectó y corrigió en T-02.
+- **Healthcheck de `kafka` necesita `timeout: 12s`, no `5s`.** El script `kafka-broker-api-versions.sh` levanta su propia JVM cliente para consultar al broker y eso solo tarda ~7s, independientemente de la carga de la máquina. Con `5s` el contenedor queda `unhealthy` de forma permanente y bloquea a todo lo que dependa de él (`alert-dispatcher-service`, `match-ingestion-service`). Corregido durante T-13 (2026-09-17).
 
 ## Qué no hacer
 

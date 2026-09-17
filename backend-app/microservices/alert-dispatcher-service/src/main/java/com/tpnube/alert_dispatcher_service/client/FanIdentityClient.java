@@ -8,10 +8,11 @@ import org.springframework.web.bind.annotation.PathVariable;
 import java.util.List;
 
 // Cliente Feign hacia fan-identity-service, resuelto vía Eureka (spring-cloud-loadbalancer).
-// El path del endpoint es provisorio: hay que alinearlo con lo que finalmente exponga fan-identity-service.
+// Path interno (fuera de /api/**, contrato T-01 sección 2.5): el gateway no lo rutea,
+// solo alcanzable dentro de la red de Docker.
 @FeignClient(name = "fan-identity-service")
 public interface FanIdentityClient {
 
-    @GetMapping("/api/fans/subscribers/{teamId}")
+    @GetMapping("/internal/fans/subscribers/{teamId}")
     List<FanSubscriberDTO> getSubscribers(@PathVariable("teamId") String teamId);
 }

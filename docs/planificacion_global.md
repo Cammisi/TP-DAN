@@ -92,7 +92,7 @@ Huecos que ni el enunciado ni la resolución propuesta resolvían. **Las seis es
 - [ ] **R-2 · `frontend-app/` todavía no existe.** Es uno de los componentes que exige el enunciado y quedó al final del plan. Conviene arrancar T-60 en paralelo con la Fase 1 para no dejarlo para la última semana.
 - [ ] **R-3 · Los `application.yaml` de los 3 microservicios estaban casi vacíos** (solo `spring.application.name`). Se completaron con defaults locales en T-02 (puerto, Eureka, datasource/Mongo/Kafka apuntando a `localhost`). **Falta verificar** que `mvn spring-boot:run` funcione contra esos defaults: esta máquina no tiene Maven ni JDK 25 instalados, solo se probó vía Docker.
 - [x] **R-4 · `fan-identity-service` tiene `spring-boot-starter-security` sin configurar.** Resuelto en T-11: `SecurityConfig` configurado con `JwtAuthenticationFilter`, rutas públicas (`/api/fans/auth/**`), rutas protegidas con JWT y contraseñas hasheadas con BCrypt.
-- [ ] **R-5 · El path del Feign client es provisorio** (`GET /api/fans/subscribers/{teamId}`). Se congela en T-01.
+- [x] **R-5 · El path del Feign client era provisorio** (`GET /api/fans/subscribers/{teamId}`). Congelado en T-01, implementado y verificado en T-13: ahora `GET /internal/fans/subscribers/{teamId}`.
 - [ ] **R-6 · Actuator solo está en `cloud-gateway`**, y los healthchecks de Docker son TCP contra el puerto. Se corrige en T-50.
 - [ ] **R-7 · Nadie valida el rol admin en `POST /api/matches/{matchId}/events`.** Por D-2 el gateway solo valida firma/autenticación (no rol), y `match-ingestion-service` no tiene Spring Security propio porque no está expuesto al host. Con el contrato de T-01, un fan autenticado (no admin) podría llamar a este endpoint vía gateway. Se resuelve en T-40: el filtro del gateway debe chequear el claim `role` para esta ruta puntual, o se documenta como limitación aceptada.
 
@@ -220,15 +220,15 @@ La Fase 0 y la Fase 2 se hacen **juntos**: definen contratos y tocan puntos de i
     - [x] El listado devuelve el nombre del equipo y su liga, resueltos por join (sin desnormalizar).
   - **Terminada cuando:** con un JWT válido se puede seguir, listar y dejar de seguir equipos, y los cambios persisten tras reiniciar el servicio. ✅ Verificado en ejecución en Docker (2026-09-17).
 
-- [ ] **T-13 · Endpoint de suscriptores por equipo** — `fan-identity-service` · depende de: T-12 · carril A
+- [x] **T-13 · Endpoint de suscriptores por equipo** — `fan-identity-service` · depende de: T-12 · carril A · [plan](plan_13_endpoint_suscriptores.md)
   - **Qué:** el endpoint que consume `alert-dispatcher-service` para saber a quién notificar, según el contrato de T-01.
   - **Por qué:** es la pieza que cierra el fan-out y la llamada que protege el Circuit Breaker.
-  - **Afecta:** `.../fan_identity_service/` (controlador interno).
+  - **Afecta:** `.../fan_identity_service/` (controlador interno), `FanIdentityClient` en `alert-dispatcher-service`.
   - **Requisitos:**
-    - [ ] Devuelve la lista de fans suscriptos a un equipo, con los campos exactos del contrato.
-    - [ ] Equipo sin suscriptos devuelve lista vacía, no 404.
-    - [ ] Queda fuera del prefijo que el gateway expone (no alcanzable desde el host).
-  - **Terminada cuando:** `alert-dispatcher-service` obtiene la lista real vía Feign dentro de la red Docker y el contrato coincide con `FanSubscriberDTO`.
+    - [x] Devuelve la lista de fans suscriptos a un equipo, con los campos exactos del contrato.
+    - [x] Equipo sin suscriptos devuelve lista vacía, no 404.
+    - [x] Queda fuera del prefijo que el gateway expone (no alcanzable desde el host).
+  - **Terminada cuando:** `alert-dispatcher-service` obtiene la lista real vía Feign dentro de la red Docker y el contrato coincide con `FanSubscriberDTO`. ✅ Verificado 2026-09-17: `GET /internal/fans/subscribers/team-colon` (con un fan suscripto) devuelve `[{"fanId":"2","email":"fan1@quienjuega.com"}]`; `team-union` (sin suscriptores) devuelve `[]`; `GET http://localhost:8080/internal/fans/subscribers/team-colon` desde el host da `404` (el gateway no rutea `/internal/**`). De paso se corrigió un problema real de infra: el healthcheck de `kafka` tenía `timeout: 5s` pero el comando tarda ~7s en responder, dejándolo `unhealthy` siempre y bloqueando a `alert-dispatcher-service`/`match-ingestion-service` (ver gotcha en `CLAUDE.md`, ahora `timeout: 12s`).
 
 - [ ] **T-14 · Historial de notificaciones** — `fan-identity-service` · depende de: T-12 · carril A
   - **Qué:** entidad `Notification`, endpoint **interno** de alta (el callback de D-3) y endpoint del fan para listar su historial.
@@ -485,11 +485,11 @@ La Fase 0 y la Fase 2 se hacen **juntos**: definen contratos y tocan puntos de i
 | Fase | Tareas | Completadas |
 |---|---|---|
 | 0 — Cimientos | 3 | 3 |
-| 1 — Núcleo de dominio | 12 | 3 |
+| 1 — Núcleo de dominio | 12 | 4 |
 | 2 — Integración y seguridad | 3 | 0 |
 | 3 — Requisitos transversales | 2 | 0 |
 | 4 — Frontend | 6 | 0 |
 | 5 — Cierre y entrega | 4 | 0 |
-| **Total** | **30** | **6** |
+| **Total** | **30** | **7** |
 
 Actualizar esta tabla al cerrar cada tarea.
