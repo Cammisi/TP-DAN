@@ -13,6 +13,10 @@ spring:
               uri: lb://FAN-IDENTITY-SERVICE
               predicates:
                 - Path=/api/fans/**
+            - id: fan-identity-catalog
+              uri: lb://FAN-IDENTITY-SERVICE
+              predicates:
+                - Path=/api/catalog/**
             - id: match-ingestion-service
               uri: lb://MATCH-INGESTION-SERVICE
               predicates:
