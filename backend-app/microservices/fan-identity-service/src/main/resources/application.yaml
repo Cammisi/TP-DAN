@@ -1,3 +1,18 @@
+server:
+  port: 8081
+
 spring:
   application:
     name: fan-identity-service
+  datasource:
+    url: jdbc:postgresql://localhost:5432/fan_identity_db
+    username: fan_admin
+    password: fan_pass123
+  jpa:
+    hibernate:
+      ddl-auto: update
+
+eureka:
+  client:
+    service-url:
+      defaultZone: http://localhost:8761/eureka/

@@ -18,9 +18,9 @@ Estado del código backend. Todavía no se escribió lógica de negocio: los com
 
 | Componente | Estado | Detalle |
 |---|---|---|
-| `eureka-server` | ✅ Hecho | App + `application.yaml` + Dockerfile. Sin verificar en ejecución. |
-| `cloud-gateway` | 🟡 Parcial | Rutas declaradas hacia los 3 MS. Sin seguridad, sin CORS. Único con Actuator. |
-| `docker-compose.yml` | ✅ Hecho | Postgres, Mongo, Kafka (KRaft), Kafka UI, los 5 servicios Spring, red y volúmenes. Sin verificar. |
+| `eureka-server` | ✅ Hecho | App + `application.yaml` + Dockerfile. Verificado en ejecución (T-02); necesitó agregar `@EnableEurekaServer`. |
+| `cloud-gateway` | 🟡 Parcial | Rutas declaradas hacia los 3 MS, verificadas arriba y registrado en Eureka. Sin seguridad, sin CORS. Único con Actuator. |
+| `docker-compose.yml` | ✅ Hecho | Postgres, Mongo, Kafka (KRaft), Kafka UI, los 5 servicios Spring, red y volúmenes. Verificado: `docker compose up --build` deja los 9 contenedores `healthy` (T-02). |
 | `fan-identity-service` | 🔴 Scaffolding | Solo la clase `@SpringBootApplication`. `application.yaml` casi vacío. Sin entidades, sin endpoints, sin seguridad configurada. |
 | `match-ingestion-service` | 🔴 Scaffolding | Solo la clase `@SpringBootApplication`. Sin documentos Mongo, sin endpoints, sin productor Kafka. |
 | `alert-dispatcher-service` | 🟡 Parcial | Feign client + Circuit Breaker configurados (paths provisorios). Sin consumer Kafka, sin orquestación. |
@@ -38,8 +38,8 @@ Estado del código backend. Todavía no se escribió lógica de negocio: los com
 | ≥ 3 microservicios Spring Boot + 1 frontend | 🟡 | Fase 1 + Fase 4 |
 | 1 base SQL + 1 NoSQL, 1 microservicio ≠ 2 bases | 🟡 | T-10, T-20 |
 | Mensajería asincrónica | 🔴 | T-23, T-30 |
-| Spring Cloud Gateway + Eureka | 🟡 | T-02 (verificación) |
-| Ejecución en contenedores Docker | ✅ | T-02 (verificación) |
+| Spring Cloud Gateway + Eureka | ✅ | T-02 (verificado) |
+| Ejecución en contenedores Docker | ✅ | T-02 (verificado) |
 | Seguridad | 🔴 | T-11, T-40, T-41 |
 | Almacén centralizado de logs | 🔴 | T-51 |
 | Telemetría de métricas de rendimiento | 🔴 | T-50 |
@@ -88,9 +88,9 @@ Huecos que ni el enunciado ni la resolución propuesta resolvían. **Las seis es
 
 ## 3. Inconsistencias y riesgos detectados
 
-- [ ] **R-1 · Stack muy reciente sin evidencia de que arranque:** Spring Boot 4.1 + Java 25 + Spring Cloud 2025.1.2 + `spring-cloud-starter-gateway-server-webmvc`. Nadie verificó todavía un `docker compose up --build` exitoso. **Es el riesgo número uno del proyecto** porque bloquea todo lo demás: por eso T-02 existe y va antes que cualquier código de negocio.
+- [x] **R-1 · Stack muy reciente sin evidencia de que arranque:** Spring Boot 4.1 + Java 25 + Spring Cloud 2025.1.2 + `spring-cloud-starter-gateway-server-webmvc`. Resuelto en T-02 (2026-09-17): `docker compose up --build` levanta los 9 contenedores `healthy`. Único ajuste necesario: `@EnableEurekaServer` faltante en `eureka-server`.
 - [ ] **R-2 · `frontend-app/` todavía no existe.** Es uno de los componentes que exige el enunciado y quedó al final del plan. Conviene arrancar T-60 en paralelo con la Fase 1 para no dejarlo para la última semana.
-- [ ] **R-3 · Los `application.yaml` de los 3 microservicios están casi vacíos** (solo `spring.application.name`). Toda la configuración vive en variables de entorno de `docker-compose.yml`, así que hoy **ningún microservicio se puede correr con `mvn spring-boot:run`** para desarrollar. Se corrige en T-02.
+- [ ] **R-3 · Los `application.yaml` de los 3 microservicios estaban casi vacíos** (solo `spring.application.name`). Se completaron con defaults locales en T-02 (puerto, Eureka, datasource/Mongo/Kafka apuntando a `localhost`). **Falta verificar** que `mvn spring-boot:run` funcione contra esos defaults: esta máquina no tiene Maven ni JDK 25 instalados, solo se probó vía Docker.
 - [ ] **R-4 · `fan-identity-service` tiene `spring-boot-starter-security` sin configurar.** Al arrancar, Spring Security protege todo con basic auth y una contraseña random en el log: cualquier request vía gateway daría 401. Se corrige en T-11.
 - [ ] **R-5 · El path del Feign client es provisorio** (`GET /api/fans/subscribers/{teamId}`). Se congela en T-01.
 - [ ] **R-6 · Actuator solo está en `cloud-gateway`**, y los healthchecks de Docker son TCP contra el puerto. Se corrige en T-50.
@@ -166,18 +166,18 @@ La Fase 0 y la Fase 2 se hacen **juntos**: definen contratos y tocan puntos de i
     - [x] Formato único de error para todos los servicios.
   - **Terminada cuando:** cada carril puede implementar su parte sin preguntarle nada a los otros dos.
 
-- [ ] **T-02 · Configuración base ejecutable y prueba de humo del stack** — los 5 servicios Spring · depende de: — · todos
+- [x] **T-02 · Configuración base ejecutable y prueba de humo del stack** — los 5 servicios Spring · depende de: — · todos
   - **Qué:** completar los `application.yaml` de los 3 microservicios (puerto, cliente Eureka, datasource/Mongo/Kafka con valores por defecto para correr local), y verificar de punta a punta que `docker compose up --build` levanta todo y los 5 servicios aparecen registrados en Eureka.
   - **Por qué:** R-1 y R-3. Hoy la configuración vive solo en variables de entorno de Docker, así que nadie puede correr un microservicio suelto para desarrollar; y el stack (Boot 4.1 / Java 25 / Spring Cloud 2025.1.2) nunca se ejecutó. Si algo de esto no compila, bloquea el proyecto entero y hay que saberlo ahora, no en la semana de entrega.
   - **Afecta:** `*/src/main/resources/application.yaml`, eventualmente `pom.xml` y `docker-compose.yml`.
   - **Requisitos:**
-    - [ ] Cada microservicio define `server.port` y `eureka.client.service-url.defaultZone` con default local, sobreescribible por variable de entorno (las de `docker-compose.yml` siguen funcionando).
-    - [ ] `mvn spring-boot:run` levanta cada microservicio contra la infra local sin editar archivos.
-    - [ ] `docker compose up --build` completa sin errores y todos los contenedores quedan `healthy`.
-    - [ ] El dashboard de Eureka en `:8761` muestra los 4 clientes registrados.
-    - [ ] Se confirma que el namespace `spring.cloud.gateway.server.webmvc.routes` es el correcto para esta versión (ver `CLAUDE.md`).
-    - [ ] Cualquier problema de versiones se documenta en `CLAUDE.md`.
-  - **Terminada cuando:** cualquier integrante clona el repo, corre `docker compose up --build` y ve los 4 servicios en Eureka.
+    - [x] Cada microservicio define `server.port` y `eureka.client.service-url.defaultZone` con default local, sobreescribible por variable de entorno (las de `docker-compose.yml` siguen funcionando).
+    - [ ] `mvn spring-boot:run` levanta cada microservicio contra la infra local sin editar archivos. *(Sin verificar: esta máquina no tiene Maven ni JDK 25 instalados, solo Docker. Los defaults locales ya están en los `application.yaml`, pero falta que alguien con Maven+JDK25 lo confirme.)*
+    - [x] `docker compose up --build` completa sin errores y todos los contenedores quedan `healthy`.
+    - [x] El dashboard de Eureka en `:8761` muestra los 4 clientes registrados.
+    - [x] Se confirma que el namespace `spring.cloud.gateway.server.webmvc.routes` es el correcto para esta versión (ver `CLAUDE.md`).
+    - [x] Cualquier problema de versiones se documenta en `CLAUDE.md`.
+  - **Terminada cuando:** cualquier integrante clona el repo, corre `docker compose up --build` y ve los 4 servicios en Eureka. ✅ Verificado 2026-09-17: los 9 contenedores quedan `healthy` y los 4 clientes (FAN-IDENTITY-SERVICE, MATCH-INGESTION-SERVICE, ALERT-DISPATCHER-SERVICE, CLOUD-GATEWAY) aparecen `UP` en Eureka. Hizo falta agregar `@EnableEurekaServer` a `EurekaServerApplication` (ver gotcha en `CLAUDE.md`).
 
 ### Fase 1 — Núcleo de dominio (paralelizable en 3 carriles)
 
@@ -484,12 +484,12 @@ La Fase 0 y la Fase 2 se hacen **juntos**: definen contratos y tocan puntos de i
 
 | Fase | Tareas | Completadas |
 |---|---|---|
-| 0 — Cimientos | 3 | 2 |
+| 0 — Cimientos | 3 | 3 |
 | 1 — Núcleo de dominio | 12 | 0 |
 | 2 — Integración y seguridad | 3 | 0 |
 | 3 — Requisitos transversales | 2 | 0 |
 | 4 — Frontend | 6 | 0 |
 | 5 — Cierre y entrega | 4 | 0 |
-| **Total** | **30** | **2** |
+| **Total** | **30** | **3** |
 
 Actualizar esta tabla al cerrar cada tarea.

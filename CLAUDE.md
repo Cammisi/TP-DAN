@@ -65,6 +65,7 @@ Cosas que ya costaron tiempo o que pueden romper de formas poco obvias:
 - **Kafka en modo KRaft, dos listeners.** `kafka:19092` para tráfico entre contenedores (el que usan los microservicios vía `SPRING_KAFKA_BOOTSTRAPSERVERS`) y `localhost:9092` para herramientas del host. Los tópicos conviene declararlos explícitamente con beans `NewTopic` en vez de depender de la auto-creación del broker.
 - **Healthchecks sin Actuator.** Hoy solo `cloud-gateway` tiene `spring-boot-starter-actuator`; los healthchecks de los demás en `docker-compose.yml` son un chequeo TCP (`/dev/tcp` vía `bash`) contra el puerto, no un `GET /actuator/health`. Reflejan si el puerto está abierto, no si la app funciona.
 - **Spring Security sin configurar protege todo.** `fan-identity-service` tiene el starter de security en el `pom` pero ninguna `SecurityFilterChain`: al arrancar aplica basic auth con una contraseña random en el log, así que cualquier request vía gateway devuelve 401 hasta que se configure.
+- **`eureka-server` necesita `@EnableEurekaServer` en la clase principal.** Sin ella, `spring-cloud-starter-netflix-eureka-server` no activa su auto-configuración de servidor y el arranque falla con `NoSuchBeanDefinitionException: TransportClientFactories` al intentar auto-registrarse como cliente. Se detectó y corrigió en T-02.
 
 ## Qué no hacer
 

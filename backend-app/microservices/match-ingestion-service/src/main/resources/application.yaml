@@ -1,3 +1,16 @@
+server:
+  port: 8082
+
 spring:
   application:
     name: match-ingestion-service
+  data:
+    mongodb:
+      uri: mongodb://localhost:27017/match_ingestion_db
+  kafka:
+    bootstrap-servers: localhost:9092
+
+eureka:
+  client:
+    service-url:
+      defaultZone: http://localhost:8761/eureka/
