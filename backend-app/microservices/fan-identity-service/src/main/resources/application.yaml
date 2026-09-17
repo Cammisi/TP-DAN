@@ -17,3 +17,7 @@ eureka:
   client:
     service-url:
       defaultZone: http://localhost:8761/eureka/
+
+jwt:
+  secret: default-dev-secret-key-que-tiene-al-menos-256-bits-para-hs256
+  expiration-ms: 86400000
