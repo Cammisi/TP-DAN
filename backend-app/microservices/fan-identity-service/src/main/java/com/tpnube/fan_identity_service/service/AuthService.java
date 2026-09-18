@@ -60,7 +60,7 @@ public class AuthService {
         return new LoginResponseDTO(token, fan.getId().toString(), fan.getRole().name());
     }
 
-    // --- Excepciones de negocio (paquete-privadas, las maneja el GlobalExceptionHandler) ---
+    // --- Excepciones de negocio (públicas porque GlobalExceptionHandler, en otro paquete, las mapea) ---
 
     public static class EmailAlreadyExistsException extends RuntimeException {
         public EmailAlreadyExistsException(String email) {

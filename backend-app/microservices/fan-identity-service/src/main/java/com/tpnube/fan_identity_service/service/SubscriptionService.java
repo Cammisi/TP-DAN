@@ -34,6 +34,10 @@ public class SubscriptionService {
 
     @Transactional
     public SubscriptionResult subscribe(Long fanId, String teamId) {
+        if (teamId == null || teamId.isBlank()) {
+            throw new InvalidRequestException("El teamId es obligatorio");
+        }
+
         Team team = teamRepository.findById(teamId)
                 .orElseThrow(() -> new TeamNotFoundException(teamId));
 
@@ -91,6 +95,12 @@ public class SubscriptionService {
     public static class TeamNotFoundException extends RuntimeException {
         public TeamNotFoundException(String teamId) {
             super("El equipo '" + teamId + "' no existe en el catálogo");
+        }
+    }
+
+    public static class InvalidRequestException extends RuntimeException {
+        public InvalidRequestException(String message) {
+            super(message);
         }
     }
 }

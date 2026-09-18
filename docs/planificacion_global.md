@@ -21,7 +21,7 @@ Estado del código backend. Todavía no se escribió lógica de negocio: los com
 | `eureka-server` | ✅ Hecho | App + `application.yaml` + Dockerfile. Verificado en ejecución (T-02); necesitó agregar `@EnableEurekaServer`. |
 | `cloud-gateway` | 🟡 Parcial | Rutas declaradas hacia los 3 MS, verificadas arriba y registrado en Eureka. Sin seguridad, sin CORS. Único con Actuator. |
 | `docker-compose.yml` | ✅ Hecho | Postgres, Mongo, Kafka (KRaft), Kafka UI, los 5 servicios Spring, red y volúmenes. Verificado: `docker compose up --build` deja los 9 contenedores `healthy` (T-02). |
-| `fan-identity-service` | 🔴 Scaffolding | Solo la clase `@SpringBootApplication`. `application.yaml` casi vacío. Sin entidades, sin endpoints, sin seguridad configurada. |
+| `fan-identity-service` | ✅ Hecho (carril A) | Modelo de datos y catálogo (T-10), auth con JWT (T-11), suscripciones (T-12), suscriptores por equipo (T-13), historial de notificaciones (T-14) y catálogo de ligas/equipos (T-15). Falta blindar los endpoints internos con secreto compartido (T-41). |
 | `match-ingestion-service` | 🔴 Scaffolding | Solo la clase `@SpringBootApplication`. Sin documentos Mongo, sin endpoints, sin productor Kafka. |
 | `alert-dispatcher-service` | 🟡 Parcial | Feign client + Circuit Breaker configurados (paths provisorios). Sin consumer Kafka, sin orquestación. |
 | `frontend-app` | 🔴 No existe | La carpeta no está en el repo. Se crea en T-60. |

@@ -24,11 +24,40 @@ public class NotificationService {
     }
 
     @Transactional
-    public Long createNotification(Long fanId, String eventId, String matchId, String teamId,
+    public Long createNotification(String fanId, String eventId, String matchId, String teamId,
                                     String message, Instant occurredAt) {
-        Fan fan = fanRepository.findById(fanId)
-                .orElseThrow(() -> new FanNotFoundException(fanId));
+        if (fanId == null || fanId.isBlank()) {
+            throw new InvalidRequestException("El fanId es obligatorio");
+        }
+        if (eventId == null || eventId.isBlank()) {
+            throw new InvalidRequestException("El eventId es obligatorio");
+        }
+        if (matchId == null || matchId.isBlank()) {
+            throw new InvalidRequestException("El matchId es obligatorio");
+        }
+        if (teamId == null || teamId.isBlank()) {
+            throw new InvalidRequestException("El teamId es obligatorio");
+        }
+        if (message == null || message.isBlank()) {
+            throw new InvalidRequestException("El message es obligatorio");
+        }
+        if (occurredAt == null) {
+            throw new InvalidRequestException("El occurredAt es obligatorio");
+        }
 
+        Long parsedFanId;
+        try {
+            parsedFanId = Long.parseLong(fanId);
+        } catch (NumberFormatException e) {
+            throw new InvalidRequestException("El fanId debe ser numérico");
+        }
+
+        Fan fan = fanRepository.findById(parsedFanId)
+                .orElseThrow(() -> new FanNotFoundException(parsedFanId));
+
+        // createdAt guarda el occurredAt del evento deportivo que originó la notificación
+        // (cuándo pasó, no cuándo se insertó la fila): es la fecha que tiene sentido
+        // mostrarle al fan y la que espera el contrato en la respuesta del listado.
         Notification notification = new Notification(null, fan, message, matchId, teamId, eventId, occurredAt);
         notificationRepository.save(notification);
         return notification.getId();
@@ -52,6 +81,12 @@ public class NotificationService {
     public static class FanNotFoundException extends RuntimeException {
         public FanNotFoundException(Long fanId) {
             super("El fan '" + fanId + "' no existe");
+        }
+    }
+
+    public static class InvalidRequestException extends RuntimeException {
+        public InvalidRequestException(String message) {
+            super(message);
         }
     }
 }

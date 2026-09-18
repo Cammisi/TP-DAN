@@ -39,9 +39,8 @@ public class InternalFanController {
 
     @PostMapping("/notifications")
     public ResponseEntity<NotificationCreatedDTO> createNotification(@RequestBody NotificationRequestDTO request) {
-        Long fanId = Long.parseLong(request.fanId());
         Long notificationId = notificationService.createNotification(
-                fanId, request.eventId(), request.matchId(), request.teamId(),
+                request.fanId(), request.eventId(), request.matchId(), request.teamId(),
                 request.message(), request.occurredAt());
         return ResponseEntity.status(HttpStatus.CREATED).body(new NotificationCreatedDTO(notificationId.toString()));
     }
