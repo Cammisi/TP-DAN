@@ -196,9 +196,12 @@ build:
 
 - **¿Qué hace?** Se encarga de la **ingesta y gestión de datos de partidos deportivos**.
 - **Base de datos**: Se conecta a **MongoDB** (`mongo:27017/match_ingestion_db`) para guardar la información de partidos en formato de documentos.
-- **Mensajería**: Se conecta a **Kafka** (`kafka:19092`) para publicar eventos cuando se crean o actualizan partidos.
+- **Mensajería**: Se conecta a **Kafka** (`kafka:19092`) para publicar eventos cuando se ingesta un gol, tarjeta o fin de partido.
 - **`depends_on`**: Necesita que **MongoDB**, **Kafka** y **Eureka** estén saludables.
 - **Puerto interno**: 8082.
+
+> [!WARNING]
+> La variable se llama `SPRING_MONGODB_URI`, no `SPRING_DATA_MONGODB_URI`. En Spring Boot 4 la property de conexión a Mongo cambió de nombre (`spring.data.mongodb.uri` → `spring.mongodb.uri`) y la vieja quedó deprecada a nivel `error`: ya no se bindea, así que el driver ignoraría esta variable y probaría conectarse a `localhost` dentro del contenedor. Se detectó y corrigió en T-20 (R-8).
 
 ---
 

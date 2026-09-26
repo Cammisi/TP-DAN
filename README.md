@@ -54,7 +54,7 @@ El catálogo de ligas y equipos vive en `fan-identity-service` y no en `match-in
 
 ## Estado del proyecto
 
-El proyecto está en etapa inicial: la infraestructura (Eureka, gateway, Docker Compose con Postgres, MongoDB y Kafka) está armada, y los tres microservicios tienen su esqueleto Spring Boot creado pero todavía sin lógica de negocio. El frontend todavía no fue creado.
+La infraestructura (Eureka, gateway, Docker Compose con Postgres, MongoDB y Kafka) está armada y verificada en ejecución. `fan-identity-service` está completo (auth, catálogo, suscripciones, historial de notificaciones). `match-ingestion-service` y `alert-dispatcher-service` tienen su lógica de negocio implementada (modelo de datos, ingesta y consulta de eventos, mensajería Kafka, fan-out de alertas y Circuit Breaker), pendiente de verificar ejecutando el stack completo de punta a punta. El frontend todavía no fue creado.
 
 El detalle del avance, las tareas pendientes y el orden en que hay que abordarlas están en **[docs/planificacion_global.md](docs/planificacion_global.md)**.
 
@@ -103,7 +103,7 @@ docker compose down -v
 
 El orden de arranque está gobernado por `depends_on` con `condition: service_healthy`: las bases de datos y Kafka deben pasar su healthcheck antes de que arranquen los microservicios correspondientes, y `eureka-server` debe estar saludable antes que cualquier cliente Eureka.
 
-> El stack todavía no fue verificado en ejecución de punta a punta. Esa verificación es la tarea T-02 de la planificación global.
+> El levantamiento de los 9 contenedores está verificado (T-02). El recorrido funcional de punta a punta (registro → login → suscripción → evento → alerta) todavía no: es la tarea T-42 de la planificación global.
 
 ## Puertos y paneles
 
@@ -132,7 +132,11 @@ Toda la documentación vive en [docs/](docs/):
 | [planificacion_global.md](docs/planificacion_global.md) | Planificación general y seguimiento del avance. **Punto de partida para trabajar.** |
 | [enunciado.md](docs/enunciado.md) | Enunciado original de la cátedra |
 | [resolucion_propuesta.md](docs/resolucion_propuesta.md) | Informe con la solución propuesta por el grupo, incluidos los mockups |
+| [explicacion_contratos_api.md](docs/explicacion_contratos_api.md) | Contrato de todas las APIs y el esquema del evento Kafka |
 | [explicacion_docker_compose.md](docs/explicacion_docker_compose.md) | Cómo funciona el `docker-compose.yml`, servicio por servicio |
+| [explicacion_modelo_mongo.md](docs/explicacion_modelo_mongo.md) | Modelo de documentos de `match-ingestion-service` y por qué NoSQL |
+| [explicacion_mensajeria_kafka.md](docs/explicacion_mensajeria_kafka.md) | Productor y consumer de Kafka, esquema del evento, cómo demostrarlo |
+| [explicacion_circuit_breaker.md](docs/explicacion_circuit_breaker.md) | Circuit Breaker (Resilience4J), cómo demostrar la apertura |
 
 Convención de nombres dentro de `docs/`:
 

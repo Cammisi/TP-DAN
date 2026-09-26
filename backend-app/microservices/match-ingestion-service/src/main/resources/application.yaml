@@ -4,13 +4,21 @@ server:
 spring:
   application:
     name: match-ingestion-service
-  data:
-    mongodb:
-      uri: mongodb://localhost:27017/match_ingestion_db
+  mongodb:
+    uri: mongodb://localhost:27017/match_ingestion_db # spring.mongodb.uri, no spring.data.mongodb.uri (ver CLAUDE.md)
   kafka:
     bootstrap-servers: localhost:9092
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JacksonJsonSerializer
+      properties:
+        spring.json.add.type.headers: false
+        max.block.ms: 5000 # que un Kafka caído no cuelgue el POST de ingesta
 
 eureka:
   client:
     service-url:
       defaultZone: http://localhost:8761/eureka/
+
+topics:
+  match-events: match-events

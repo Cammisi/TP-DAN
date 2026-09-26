@@ -180,7 +180,9 @@ services:
     container_name: match-ingestion-service
     environment:
       SERVER_PORT: 8082
-      SPRING_DATA_MONGODB_URI: mongodb://mongo:27017/match_ingestion_db
+      # SPRING_MONGODB_URI, no SPRING_DATA_MONGODB_URI: en Boot 4 la property vieja
+      # quedó deprecada y ya no se bindea (R-8, ver CLAUDE.md).
+      SPRING_MONGODB_URI: mongodb://mongo:27017/match_ingestion_db
       SPRING_KAFKA_BOOTSTRAPSERVERS: kafka:19092
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
       EUREKA_INSTANCE_PREFERIPADDRESS: "true"

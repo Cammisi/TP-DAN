@@ -2,16 +2,21 @@ package com.tpnube.alert_dispatcher_service.service;
 
 import com.tpnube.alert_dispatcher_service.client.FanIdentityClient;
 import com.tpnube.alert_dispatcher_service.client.dto.FanSubscriberDTO;
+import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.cloud.client.circuitbreaker.CircuitBreakerFactory;
 import org.springframework.stereotype.Service;
 
-import java.util.Collections;
 import java.util.List;
 
 @Service
 public class FanIdentityLookupService {
 
-    private static final String CIRCUIT_BREAKER_NAME = "fanIdentityService";
+    // public: DispatcherStatusService consulta este mismo circuito por nombre.
+    public static final String CIRCUIT_BREAKER_NAME = "fanIdentityService";
+
+    private static final Logger log = LoggerFactory.getLogger(FanIdentityLookupService.class);
 
     private final FanIdentityClient fanIdentityClient;
     private final CircuitBreakerFactory<?, ?> circuitBreakerFactory;
@@ -29,8 +34,18 @@ public class FanIdentityLookupService {
     }
 
     private List<FanSubscriberDTO> fallbackSubscribers(String teamId, Throwable throwable) {
-        // TODO: encolar el evento para reintentar cuando fan-identity-service se recupere,
-        // en vez de simplemente devolver una lista vacía.
-        return Collections.emptyList();
+        if (throwable instanceof CallNotPermittedException) {
+            log.warn("Circuito abierto: no se consultó fan-identity para el equipo {}", teamId);
+        } else {
+            log.warn("Falló la consulta de suscriptores del equipo {}: {}", teamId, throwable.getMessage());
+        }
+        // Se propaga en vez de devolver [] para no confundir "sin suscriptos" con "no pude averiguarlo".
+        throw new SubscribersUnavailableException(teamId, throwable);
+    }
+
+    public static class SubscribersUnavailableException extends RuntimeException {
+        public SubscribersUnavailableException(String teamId, Throwable cause) {
+            super("No se pudieron obtener los suscriptores del equipo '" + teamId + "'", cause);
+        }
     }
 }

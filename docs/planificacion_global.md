@@ -14,7 +14,7 @@ Documento de planificación y seguimiento del TP integrador. Es el **único luga
 
 ## 1. Estado actual del proyecto
 
-Estado del código backend. Todavía no se escribió lógica de negocio: los commits posteriores a esta planificación son solo documentación.
+Estado del código backend, actualizado a medida que se implementan tareas.
 
 | Componente | Estado | Detalle |
 |---|---|---|
@@ -22,28 +22,28 @@ Estado del código backend. Todavía no se escribió lógica de negocio: los com
 | `cloud-gateway` | 🟡 Parcial | Rutas declaradas hacia los 3 MS, verificadas arriba y registrado en Eureka. Sin seguridad, sin CORS. Único con Actuator. |
 | `docker-compose.yml` | ✅ Hecho | Postgres, Mongo, Kafka (KRaft), Kafka UI, los 5 servicios Spring, red y volúmenes. Verificado: `docker compose up --build` deja los 9 contenedores `healthy` (T-02). |
 | `fan-identity-service` | ✅ Hecho (carril A) | Modelo de datos y catálogo (T-10), auth con JWT (T-11), suscripciones (T-12), suscriptores por equipo (T-13), historial de notificaciones (T-14) y catálogo de ligas/equipos (T-15). Falta blindar los endpoints internos con secreto compartido (T-41). |
-| `match-ingestion-service` | 🔴 Scaffolding | Solo la clase `@SpringBootApplication`. Sin documentos Mongo, sin endpoints, sin productor Kafka. |
-| `alert-dispatcher-service` | 🟡 Parcial | Feign client + Circuit Breaker configurados (paths provisorios). Sin consumer Kafka, sin orquestación. |
+| `match-ingestion-service` | 🟡 Implementado, sin verificar | Documentos Mongo y semilla (T-20), ingesta de eventos (T-21), consulta de partidos/eventos (T-22) y productor Kafka (T-23). Falta correr el stack completo y confirmar cada *Terminada cuando* (ver `plan_20`-`plan_23`). |
+| `alert-dispatcher-service` | 🟡 Implementado, sin verificar | Consumer Kafka y orquestación del fan-out (T-30), fallback real que registra no despachados y `GET /api/alerts/status` (T-31). Falta correr el stack completo y confirmar cada *Terminada cuando* (ver `plan_30`, `plan_31`). |
 | `frontend-app` | 🔴 No existe | La carpeta no está en el repo. Se crea en T-60. |
 | Seguridad (JWT) | 🔴 Falta | Solo la dependencia en el `pom` de fan-identity. |
-| Mensajería (Kafka) | 🔴 Falta | Infra levantada, sin producer ni consumer ni esquema de evento. |
+| Mensajería (Kafka) | 🟡 Implementado, sin verificar | Productor (`match-ingestion-service`, T-23) y consumer (`alert-dispatcher-service`, T-30) con el esquema de T-01. Falta verificar contra Kafka real (ver `docs/explicacion_mensajeria_kafka.md`). |
 | Logs centralizados | 🔴 Falta | Requisito obligatorio del enunciado. Stack decidido en D-4; falta implementarlo (T-51). |
 | Telemetría de métricas | 🔴 Falta | Requisito obligatorio del enunciado. Stack decidido en D-4; falta implementarlo (T-50). |
-| Resilience4J (extra) | 🟡 Parcial | Circuito configurado, fallback devuelve lista vacía con un `TODO`. |
+| Resilience4J (extra) | 🟡 Implementado, sin verificar | El fallback ya no descarta eventos: los registra como no despachados y los expone en `GET /api/alerts/status` (T-31). Falta reproducir la demo de apertura del circuito (ver `docs/explicacion_circuit_breaker.md`). |
 
 ### Cobertura de los requisitos obligatorios del enunciado
 
 | Requisito del enunciado | Estado | Se resuelve en |
 |---|---|---|
 | ≥ 3 microservicios Spring Boot + 1 frontend | 🟡 | Fase 1 + Fase 4 |
-| 1 base SQL + 1 NoSQL, 1 microservicio ≠ 2 bases | 🟡 | T-10, T-20 |
-| Mensajería asincrónica | 🔴 | T-23, T-30 |
+| 1 base SQL + 1 NoSQL, 1 microservicio ≠ 2 bases | 🟡 | T-10 (verificado), T-20 (implementado, sin verificar) |
+| Mensajería asincrónica | 🟡 | T-23, T-30 (implementado, sin verificar) |
 | Spring Cloud Gateway + Eureka | ✅ | T-02 (verificado) |
 | Ejecución en contenedores Docker | ✅ | T-02 (verificado) |
 | Seguridad | 🟡 | T-11 (hecho), T-40, T-41 |
 | Almacén centralizado de logs | 🔴 | T-51 |
 | Telemetría de métricas de rendimiento | 🔴 | T-50 |
-| 1 característica extra (Resilience4J) | 🟡 | T-31 |
+| 1 característica extra (Resilience4J) | 🟡 | T-31 (implementado, sin verificar) |
 
 ---
 
@@ -94,7 +94,8 @@ Huecos que ni el enunciado ni la resolución propuesta resolvían. **Las seis es
 - [x] **R-4 · `fan-identity-service` tiene `spring-boot-starter-security` sin configurar.** Resuelto en T-11: `SecurityConfig` configurado con `JwtAuthenticationFilter`, rutas públicas (`/api/fans/auth/**`), rutas protegidas con JWT y contraseñas hasheadas con BCrypt.
 - [x] **R-5 · El path del Feign client era provisorio** (`GET /api/fans/subscribers/{teamId}`). Congelado en T-01, implementado y verificado en T-13: ahora `GET /internal/fans/subscribers/{teamId}`.
 - [ ] **R-6 · Actuator solo está en `cloud-gateway`**, y los healthchecks de Docker son TCP contra el puerto. Se corrige en T-50.
-- [ ] **R-7 · Nadie valida el rol admin en `POST /api/matches/{matchId}/events`.** Por D-2 el gateway solo valida firma/autenticación (no rol), y `match-ingestion-service` no tiene Spring Security propio porque no está expuesto al host. Con el contrato de T-01, un fan autenticado (no admin) podría llamar a este endpoint vía gateway. Se resuelve en T-40: el filtro del gateway debe chequear el claim `role` para esta ruta puntual, o se documenta como limitación aceptada.
+- [ ] **R-7 · Nadie valida el rol admin en `POST /api/matches/{matchId}/events`.** Por D-2 el gateway solo valida firma/autenticación (no rol), y `match-ingestion-service` no tiene Spring Security propio porque no está expuesto al host. Con el contrato de T-01, un fan autenticado (no admin) podría llamar a este endpoint vía gateway. Lo mismo aplica a `GET /api/alerts/status` (admin según el contrato, D-6), ya que `alert-dispatcher-service` tampoco tiene Spring Security. Se resuelve en T-40: el filtro del gateway debe chequear el claim `role` para estas rutas puntuales, o se documenta como limitación aceptada.
+- [ ] **R-8 · La URI de Mongo de `match-ingestion-service` se ignora en Boot 4.** `application.yaml` usaba `spring.data.mongodb.uri` y el compose `SPRING_DATA_MONGODB_URI`, pero en Spring Boot 4 la property pasó a `spring.mongodb.uri` (el metadata de `spring-boot-mongodb-4.1.0.jar` marca la vieja como *deprecated* nivel `error`: ya no se bindea). El servicio intentaría conectarse a `localhost:27017` dentro del contenedor. T-02 no lo detectó porque sin repositorios el driver nunca se conecta. Corregido en el código de T-20 (ver [plan](plan_20_modelo_partidos_eventos.md)); falta confirmar arrancando el servicio contra el Mongo del compose.
 
 ---
 
@@ -252,7 +253,9 @@ La Fase 0 y la Fase 2 se hacen **juntos**: definen contratos y tocan puntos de i
 
 #### Carril B — `match-ingestion-service` y `alert-dispatcher-service`
 
-- [ ] **T-20 · Modelo de documentos de partidos y eventos** — `match-ingestion-service` · depende de: T-01, T-02 · carril B
+> **Estado 2026-09-26:** las seis tareas (T-20 a T-31) están **implementadas** siguiendo sus `plan_*` aprobados, pero **sin verificar ejecutando** (`docker compose` estaba apagado durante la implementación). No se tildan los checkboxes hasta correr el stack y confirmar cada *Terminada cuando* — ver el plan de verificación de cada `plan_*` para los pasos exactos.
+
+- [ ] **T-20 · Modelo de documentos de partidos y eventos** — `match-ingestion-service` · depende de: T-01, T-02 · carril B · [plan](plan_20_modelo_partidos_eventos.md)
   - **Qué:** documentos Mongo para partido y evento deportivo, con repositorios y datos semilla (un par de partidos).
   - **Por qué:** es la justificación de haber elegido MongoDB: los eventos son heterogéneos y un esquema de documentos flexible encaja mejor que uno relacional. Por D-1 el catálogo de ligas/equipos **no** vive acá.
   - **Afecta:** `.../match_ingestion_service/` (dominio y repositorios).
@@ -261,8 +264,9 @@ La Fase 0 y la Fase 2 se hacen **juntos**: definen contratos y tocan puntos de i
     - [ ] Partido y evento referencian `teamId` como string: el mismo identificador que usa el catálogo de T-10, sin FK entre servicios.
     - [ ] Semilla idempotente.
   - **Terminada cuando:** el servicio arranca contra Mongo y los partidos semilla se pueden consultar desde la base.
+  - **Documentado en:** [explicacion_modelo_mongo.md](explicacion_modelo_mongo.md).
 
-- [ ] **T-21 · Endpoint de ingesta de eventos** — `match-ingestion-service` · depende de: T-20 · carril B
+- [ ] **T-21 · Endpoint de ingesta de eventos** — `match-ingestion-service` · depende de: T-20 · carril B · [plan](plan_21_ingesta_eventos.md)
   - **Qué:** el endpoint que recibe un evento deportivo de un proveedor externo, lo valida y lo persiste. Es también el que usa el admin para simular.
   - **Por qué:** es la puerta de entrada de datos del sistema y el disparador de todo el flujo de punta a punta.
   - **Afecta:** `.../match_ingestion_service/` (controlador y servicio de ingesta).
@@ -272,7 +276,7 @@ La Fase 0 y la Fase 2 se hacen **juntos**: definen contratos y tocan puntos de i
     - [ ] Persiste el evento y devuelve su identificador.
   - **Terminada cuando:** un POST con un evento válido lo deja guardado en Mongo, y uno inválido devuelve error sin ensuciar la base.
 
-- [ ] **T-22 · Consulta de partidos y eventos** — `match-ingestion-service` · depende de: T-20 · carril B
+- [ ] **T-22 · Consulta de partidos y eventos** — `match-ingestion-service` · depende de: T-20 · carril B · [plan](plan_22_consulta_partidos.md)
   - **Qué:** endpoints de lectura para que el frontend liste los partidos y el historial de eventos de un partido. El catálogo de ligas y equipos **no** está acá: es T-15.
   - **Por qué:** alimenta el muro de eventos en vivo del panel principal (ver el mockup en `docs/assets/mockup_panel_principal.png`).
   - **Afecta:** `.../match_ingestion_service/` (controlador de consulta).
@@ -282,7 +286,7 @@ La Fase 0 y la Fase 2 se hacen **juntos**: definen contratos y tocan puntos de i
     - [ ] Las respuestas incluyen el `teamId` de cada equipo participante para que el frontend pueda cruzarlo con el catálogo.
   - **Terminada cuando:** vía gateway se pueden listar partidos y ver los eventos de uno en orden cronológico.
 
-- [ ] **T-23 · Publicación del evento en Kafka** — `match-ingestion-service` · depende de: T-21 · carril B
+- [ ] **T-23 · Publicación del evento en Kafka** — `match-ingestion-service` · depende de: T-21 · carril B · [plan](plan_23_publicacion_kafka.md)
   - **Qué:** tras persistir un evento, publicarlo en el tópico definido en T-01, con el esquema acordado.
   - **Por qué:** es el requisito obligatorio de mensajería asincrónica y desacopla la ingesta del despacho de alertas.
   - **Afecta:** `.../match_ingestion_service/` (productor Kafka), `application.yaml`.
@@ -291,8 +295,9 @@ La Fase 0 y la Fase 2 se hacen **juntos**: definen contratos y tocan puntos de i
     - [ ] El mensaje respeta exactamente el esquema de T-01 y usa `teamId` como clave.
     - [ ] Si Kafka está caído, el evento igual queda persistido y el fallo se loguea; no se pierde el POST.
   - **Terminada cuando:** al ingestar un evento, el mensaje se ve en Kafka UI (`:8090`) en el tópico correcto.
+  - **Documentado en:** [explicacion_mensajeria_kafka.md](explicacion_mensajeria_kafka.md) (junto con T-30).
 
-- [ ] **T-30 · Consumer Kafka y orquestación del fan-out** — `alert-dispatcher-service` · depende de: T-23, T-13, T-14 · carril B
+- [ ] **T-30 · Consumer Kafka y orquestación del fan-out** — `alert-dispatcher-service` · depende de: T-23, T-13, T-14 · carril B · [plan](plan_30_consumer_fan_out.md)
   - **Qué:** consumir el tópico, resolver los suscriptos con `FanIdentityLookupService` y persistir una notificación por fan vía el callback a fan-identity.
   - **Por qué:** es el corazón del sistema: convierte un evento deportivo en alertas personalizadas.
   - **Afecta:** `.../alert_dispatcher_service/` (listener, servicio de despacho, cliente del callback).
@@ -303,7 +308,7 @@ La Fase 0 y la Fase 2 se hacen **juntos**: definen contratos y tocan puntos de i
     - [ ] Un fallo al notificar a un fan no impide notificar a los demás.
   - **Terminada cuando:** al ingestar un evento de un equipo que un fan sigue, ese fan ve la notificación en su historial.
 
-- [ ] **T-31 · Cerrar el Circuit Breaker y exponer su estado** — `alert-dispatcher-service` · depende de: T-30 · carril B
+- [ ] **T-31 · Cerrar el Circuit Breaker y exponer su estado** — `alert-dispatcher-service` · depende de: T-30 · carril B · [plan](plan_31_circuit_breaker_estado.md)
   - **Qué:** reemplazar el fallback vacío por uno real (el `TODO` de `FanIdentityLookupService`) y exponer el estado del despachador según D-6.
   - **Por qué:** Resilience4J es la característica extra elegida y hoy el fallback descarta eventos en silencio, que es justamente lo que no hay que mostrar en el coloquio.
   - **Afecta:** `.../alert_dispatcher_service/` (service, config, controlador de estado).

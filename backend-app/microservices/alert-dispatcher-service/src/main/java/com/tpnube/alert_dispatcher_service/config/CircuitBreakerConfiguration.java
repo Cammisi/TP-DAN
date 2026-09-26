@@ -18,6 +18,7 @@ public class CircuitBreakerConfiguration {
         return factory -> factory.configureDefault(id -> new Resilience4JConfigBuilder(id)
                 .circuitBreakerConfig(CircuitBreakerConfig.custom()
                         .slidingWindowSize(10)
+                        .minimumNumberOfCalls(5) // sin esto, resilience4j pide 100 por defecto (ver CLAUDE.md)
                         .failureRateThreshold(50)
                         .waitDurationInOpenState(Duration.ofSeconds(15))
                         .permittedNumberOfCallsInHalfOpenState(3)

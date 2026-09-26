@@ -195,8 +195,21 @@ Solo expone el estado del despachador para el panel de admin; el historial del f
 |---|---|---|
 | GET | `/api/alerts/status` | admin |
 
-- 200: `{ "circuitState": "CLOSED"|"OPEN"|"HALF_OPEN", "lastProcessedEvents": [{ "eventId": string, "matchId": string, "teamId": string, "dispatchedAt": ISO-8601, "subscriberCount": int }] }`
-- Contrato mínimo para que T-31 tenga algo concreto que implementar; puede crecer si esa tarea lo necesita.
+- 200:
+  ```json
+  {
+    "circuitState": "CLOSED",
+    "lastProcessedEvents": [
+      { "eventId": string, "matchId": string, "teamId": string, "dispatchedAt": ISO-8601, "subscriberCount": int }
+    ],
+    "undispatchedEvents": [
+      { "eventId": string, "matchId": string, "teamId": string, "failedAt": ISO-8601, "reason": string }
+    ]
+  }
+  ```
+- `undispatchedEvents` (agregado en T-31): eventos que no se pudieron despachar porque falló la consulta de suscriptores (circuito abierto o fan-identity caído), o porque fallaron **todos** los callbacks de notificación de ese evento. Es el registro que reemplaza al fallback silencioso original.
+- `subscriberCount` en `lastProcessedEvents` es la cantidad de fans **efectivamente notificados**, no la cantidad de suscriptos que tenía el equipo: si el callback falla para alguno mientras el evento sigue apareciendo acá (no todos fallaron), el número ya descuenta esos fallos.
+- Ambas listas guardan como máximo los últimos 20 elementos, más nuevos primero, en memoria: se reinician si el servicio se reinicia (ver `docs/explicacion_circuit_breaker.md`).
 
 ## 5. Esquema del evento Kafka
 
