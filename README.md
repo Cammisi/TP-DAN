@@ -54,7 +54,7 @@ El catálogo de ligas y equipos vive en `fan-identity-service` y no en `match-in
 
 ## Estado del proyecto
 
-La infraestructura (Eureka, gateway, Docker Compose con Postgres, MongoDB y Kafka) está armada y verificada en ejecución. `fan-identity-service` está completo (auth, catálogo, suscripciones, historial de notificaciones). `match-ingestion-service` y `alert-dispatcher-service` tienen su lógica de negocio implementada (modelo de datos, ingesta y consulta de eventos, mensajería Kafka, fan-out de alertas y Circuit Breaker), pendiente de verificar ejecutando el stack completo de punta a punta. El frontend todavía no fue creado.
+La infraestructura (Eureka, gateway, Docker Compose con Postgres, MongoDB y Kafka) está armada y verificada en ejecución. `fan-identity-service` está completo (auth, catálogo, suscripciones, historial de notificaciones). `match-ingestion-service` y `alert-dispatcher-service` también están completos y verificados en ejecución (modelo de datos, ingesta y consulta de eventos, mensajería Kafka, fan-out de alertas y Circuit Breaker). La seguridad del gateway (validación del JWT, rol admin, CORS) y la protección de los endpoints internos entre servicios están implementadas, pendientes de verificar ejecutando el stack. El frontend todavía no fue creado.
 
 El detalle del avance, las tareas pendientes y el orden en que hay que abordarlas están en **[docs/planificacion_global.md](docs/planificacion_global.md)**.
 
@@ -82,6 +82,9 @@ TP-DAN/
 Requisitos: Docker y Docker Compose.
 
 ```bash
+# Una sola vez, antes del primer arranque: crear el archivo de secretos local (git lo ignora)
+cp .env.example .env
+
 # Compilar todas las imágenes y levantar el stack completo
 docker compose up --build
 
@@ -137,6 +140,7 @@ Toda la documentación vive en [docs/](docs/):
 | [explicacion_modelo_mongo.md](docs/explicacion_modelo_mongo.md) | Modelo de documentos de `match-ingestion-service` y por qué NoSQL |
 | [explicacion_mensajeria_kafka.md](docs/explicacion_mensajeria_kafka.md) | Productor y consumer de Kafka, esquema del evento, cómo demostrarlo |
 | [explicacion_circuit_breaker.md](docs/explicacion_circuit_breaker.md) | Circuit Breaker (Resilience4J), cómo demostrar la apertura |
+| [explicacion_seguridad.md](docs/explicacion_seguridad.md) | JWT, validación en el gateway, roles, endpoints internos, CORS y secretos |
 
 Convención de nombres dentro de `docs/`:
 

@@ -83,7 +83,7 @@ Todas operan siempre sobre el fan del JWT (nunca sobre un id del body/path).
 | Método | Path | Auth |
 |---|---|---|
 | GET | `/api/fans/me/notifications` | fan |
-| POST | `/internal/fans/notifications` | interno (D-3, se blinda en T-41) |
+| POST | `/internal/fans/notifications` | interno, header `X-Internal-Api-Key` (D-3, T-41) |
 
 **GET /api/fans/me/notifications**
 - 200: `[{ "id": string, "message": string, "matchId": string, "teamId": string, "eventId": string, "createdAt": ISO-8601 }]`
@@ -114,7 +114,7 @@ Todas operan siempre sobre el fan del JWT (nunca sobre un id del body/path).
 
 | Método | Path | Auth |
 |---|---|---|
-| GET | `/internal/fans/subscribers/{teamId}` | interno (se blinda en T-41) |
+| GET | `/internal/fans/subscribers/{teamId}` | interno, header `X-Internal-Api-Key` (T-41) |
 
 - 200: `[{ "fanId": string, "email": string }]` — coincide con el `FanSubscriberDTO` ya existente en `alert-dispatcher-service` (`fanId`, `email`).
 - Equipo sin suscriptos: `200` con lista vacía, nunca 404.
@@ -147,7 +147,7 @@ Todos bajo `/api/matches/**`.
 - 400 `INVALID_EVENT` si falta un campo obligatorio o el `type` no es uno de los soportados. No persiste.
 - 404 `MATCH_NOT_FOUND` si `matchId` no existe en su propia base. **No** valida `teamId` contra el catálogo de fan-identity (D-1: no vale la pena la llamada entre servicios).
 
-> **Riesgo abierto (R-7):** por D-2 el gateway solo valida firma/autenticación, no rol, y `match-ingestion-service` no tiene Spring Security propio (no está expuesto al host). Hoy nada impide que un fan autenticado (no admin) llame a este POST vía gateway. Se resuelve en T-40: ver sección 3 de `docs/planificacion_global.md`.
+> **R-7 (resuelto en T-40):** `match-ingestion-service` no tiene Spring Security propio (D-2), así que el rol lo chequea el gateway: con un token de fan este POST devuelve `403 FORBIDDEN` sin llegar al microservicio (ver sección 7).
 
 ### 3.1 `MatchEventDTO`
 
@@ -223,4 +223,34 @@ Ejemplo de mensaje (mismo evento de gol de 3.1): `value` = el DTO de arriba, `ke
 
 ## 6. Prefijo de endpoints internos
 
-`/internal/**` en `fan-identity-service` agrupa los dos endpoints internos (2.3 y 2.5). El gateway solo declara rutas para `/api/fans/**`, `/api/catalog/**`, `/api/matches/**` y `/api/alerts/**` (ver `cloud-gateway/application.yaml`): al no existir una ruta `/internal/**`, esos endpoints quedan inalcanzables desde `localhost:8080` por construcción. Autenticarlos con un secreto compartido es alcance de T-41.
+`/internal/**` en `fan-identity-service` agrupa los dos endpoints internos (2.3 y 2.5). El gateway solo declara rutas para `/api/fans/**`, `/api/catalog/**`, `/api/matches/**` y `/api/alerts/**` (ver `cloud-gateway/application.yaml`): al no existir una ruta `/internal/**`, esos endpoints quedan inalcanzables desde `localhost:8080` por construcción. Además, desde T-40 el gateway exige token para todo lo que no sea público, así que `localhost:8080/internal/**` responde `401`.
+
+**Autenticación entre servicios (T-41):** toda llamada a `/internal/**` tiene que traer el header `X-Internal-Api-Key` con la clave compartida (`INTERNAL_API_KEY`, leída del `.env`). `alert-dispatcher-service` lo agrega a cada llamada Feign.
+
+| Caso | Respuesta |
+|---|---|
+| Sin header o con una clave incorrecta | `401 UNAUTHORIZED` |
+| Con un JWT de fan y sin la clave | `403 FORBIDDEN` |
+| Con la clave correcta | la respuesta normal del endpoint (2.3, 2.5) |
+
+## 7. Autenticación en el gateway (T-40)
+
+`cloud-gateway` valida el JWT (firma y expiración) **antes** de rutear, con el mismo secreto con el que lo firma `fan-identity-service` (`JWT_SECRET`). El token se reenvía intacto al microservicio de destino.
+
+| Ruta | Acceso |
+|---|---|
+| `OPTIONS` (preflight de CORS) | lo responde el filtro de CORS |
+| `/api/fans/auth/**` | público |
+| cualquier método que no sea `GET` sobre `/api/matches/**` (hoy, la ingesta de eventos) | solo `ADMIN` |
+| `/api/alerts/**` | solo `ADMIN` |
+| cualquier otra ruta (incluidas `/internal/**` y `/actuator/**` del gateway) | cualquier token válido |
+
+Errores que responde el propio gateway, con el formato de la sección 1:
+
+| Caso | Status | `error` | `message` |
+|---|---|---|---|
+| Falta el header `Authorization: Bearer ...` | 401 | `UNAUTHORIZED` | `Falta el token de autenticación` |
+| Firma inválida, token malformado o expirado | 401 | `UNAUTHORIZED` | `Token inválido o expirado` |
+| Token válido sin rol `ADMIN` en una ruta de admin | 403 | `FORBIDDEN` | `Se requiere rol administrador` |
+
+**CORS:** se aceptan requests del origen configurado en `cors.allowed-origins` (por defecto `http://localhost:3000`), con los métodos `GET`, `POST`, `DELETE` y los headers `Authorization` y `Content-Type`. Los errores `401`/`403` también llevan los headers CORS, así que el frontend puede leerlos.

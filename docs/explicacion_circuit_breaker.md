@@ -47,13 +47,18 @@ Esa excepción cubre el fallo de la **consulta** de suscriptores. El **callback*
 Como ese callback no pasa por el circuito, una degradación de fan-identity limitada a las escrituras (la lectura de suscriptores sigue rápida, así que el circuito permanece `CLOSED`) podría colgar el único hilo del listener de Kafka en el timeout por defecto de Feign (60 s de lectura) por cada fan del loop. Para acotar eso sin agregar un segundo circuito, `application.yaml` de `alert-dispatcher-service` fija un timeout corto específico para este cliente:
 
 ```yaml
-feign:
-  client:
-    config:
-      fan-identity-service:
-        connect-timeout: 1000
-        read-timeout: 3000
+spring:
+  cloud:
+    openfeign:
+      client:
+        config:
+          fan-identity-service:
+            connect-timeout: 1000
+            read-timeout: 3000
 ```
+
+> [!WARNING]
+> El prefijo es `spring.cloud.openfeign.client`, no `feign.client` (así era antes de OpenFeign 4). Con el prefijo viejo, Spring ignora la property sin avisar: pasó en T-31 y se corrigió en T-41 (R-10). `AlertDispatcherServiceApplicationTests` verifica que el timeout efectivamente se aplique.
 
 Con esto, un callback que no responde falla en 3 s como mucho en vez de colgarse un minuto; el `try/catch` del loop (T-30) hace el resto.
 

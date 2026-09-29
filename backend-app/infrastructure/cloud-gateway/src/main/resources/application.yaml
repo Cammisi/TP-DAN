@@ -40,3 +40,9 @@ management:
     web:
       exposure:
         include: health,gateway
+
+jwt:
+  secret: default-dev-secret-key-que-tiene-al-menos-256-bits-para-hs256 # tiene que coincidir con el de fan-identity
+
+cors:
+  allowed-origins: http://localhost:3000

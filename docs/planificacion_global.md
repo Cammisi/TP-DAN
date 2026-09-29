@@ -19,13 +19,13 @@ Estado del código backend, actualizado a medida que se implementan tareas.
 | Componente | Estado | Detalle |
 |---|---|---|
 | `eureka-server` | ✅ Hecho | App + `application.yaml` + Dockerfile. Verificado en ejecución (T-02); necesitó agregar `@EnableEurekaServer`. |
-| `cloud-gateway` | 🟡 Parcial | Rutas declaradas hacia los 3 MS, verificadas arriba y registrado en Eureka. Sin seguridad, sin CORS. Único con Actuator. |
+| `cloud-gateway` | 🟡 Implementado, sin verificar | Rutas hacia los 3 MS verificadas y registrado en Eureka. Validación del JWT, rol admin en las rutas de admin y CORS implementados (T-40); falta verificar con el stack completo (ver `plan_40`). Único con Actuator. |
 | `docker-compose.yml` | ✅ Hecho | Postgres, Mongo, Kafka (KRaft), Kafka UI, los 5 servicios Spring, red y volúmenes. Verificado: `docker compose up --build` deja los 9 contenedores `healthy` (T-02). |
 | `fan-identity-service` | ✅ Hecho (carril A) | Modelo de datos y catálogo (T-10), auth con JWT (T-11), suscripciones (T-12), suscriptores por equipo (T-13), historial de notificaciones (T-14) y catálogo de ligas/equipos (T-15). Falta blindar los endpoints internos con secreto compartido (T-41). |
 | `match-ingestion-service` | ✅ Hecho (carril B) | Documentos Mongo y semilla (T-20), ingesta de eventos (T-21), consulta de partidos/eventos (T-22) y productor Kafka (T-23). Verificado en Docker el 2026-09-26. |
 | `alert-dispatcher-service` | ✅ Hecho (carril B) | Consumer Kafka y orquestación del fan-out (T-30), fallback real que registra no despachados y `GET /api/alerts/status` (T-31). Verificado en Docker el 2026-09-26, incluida la apertura/cierre real del circuito. |
 | `frontend-app` | 🔴 No existe | La carpeta no está en el repo. Se crea en T-60. |
-| Seguridad (JWT) | 🔴 Falta | Solo la dependencia en el `pom` de fan-identity. |
+| Seguridad (JWT) | 🟡 Implementado, sin verificar | Emisión y validación del JWT en fan-identity verificadas (T-11). Validación en el gateway, rol admin, CORS (T-40) y clave para los endpoints internos (T-41) implementados; falta verificar con el stack completo (ver `docs/explicacion_seguridad.md`). |
 | Mensajería (Kafka) | ✅ Hecho | Productor (`match-ingestion-service`, T-23) y consumer (`alert-dispatcher-service`, T-30) con el esquema de T-01. Verificado contra Kafka real el 2026-09-26 (ver `docs/explicacion_mensajeria_kafka.md`). |
 | Logs centralizados | 🔴 Falta | Requisito obligatorio del enunciado. Stack decidido en D-4; falta implementarlo (T-51). |
 | Telemetría de métricas | 🔴 Falta | Requisito obligatorio del enunciado. Stack decidido en D-4; falta implementarlo (T-50). |
@@ -40,7 +40,7 @@ Estado del código backend, actualizado a medida que se implementan tareas.
 | Mensajería asincrónica | ✅ | T-23, T-30 (verificados) |
 | Spring Cloud Gateway + Eureka | ✅ | T-02 (verificado) |
 | Ejecución en contenedores Docker | ✅ | T-02 (verificado) |
-| Seguridad | 🟡 | T-11 (hecho), T-40, T-41 |
+| Seguridad | 🟡 | T-11 (verificado), T-40, T-41 (implementados, sin verificar) |
 | Almacén centralizado de logs | 🔴 | T-51 |
 | Telemetría de métricas de rendimiento | 🔴 | T-50 |
 | 1 característica extra (Resilience4J) | ✅ | T-31 (verificado) |
@@ -94,9 +94,10 @@ Huecos que ni el enunciado ni la resolución propuesta resolvían. **Las seis es
 - [x] **R-4 · `fan-identity-service` tiene `spring-boot-starter-security` sin configurar.** Resuelto en T-11: `SecurityConfig` configurado con `JwtAuthenticationFilter`, rutas públicas (`/api/fans/auth/**`), rutas protegidas con JWT y contraseñas hasheadas con BCrypt.
 - [x] **R-5 · El path del Feign client era provisorio** (`GET /api/fans/subscribers/{teamId}`). Congelado en T-01, implementado y verificado en T-13: ahora `GET /internal/fans/subscribers/{teamId}`.
 - [ ] **R-6 · Actuator solo está en `cloud-gateway`**, y los healthchecks de Docker son TCP contra el puerto. Se corrige en T-50.
-- [ ] **R-7 · Nadie valida el rol admin en `POST /api/matches/{matchId}/events`.** Por D-2 el gateway solo valida firma/autenticación (no rol), y `match-ingestion-service` no tiene Spring Security propio porque no está expuesto al host. Con el contrato de T-01, un fan autenticado (no admin) podría llamar a este endpoint vía gateway. Lo mismo aplica a `GET /api/alerts/status` (admin según el contrato, D-6), ya que `alert-dispatcher-service` tampoco tiene Spring Security. Se resuelve en T-40: el filtro del gateway debe chequear el claim `role` para estas rutas puntuales, o se documenta como limitación aceptada.
+- [ ] **R-7 · Nadie valida el rol admin en `POST /api/matches/{matchId}/events`.** Por D-2 el gateway solo valida firma/autenticación (no rol), y `match-ingestion-service` no tiene Spring Security propio porque no está expuesto al host. Con el contrato de T-01, un fan autenticado (no admin) podría llamar a este endpoint vía gateway. Lo mismo aplica a `GET /api/alerts/status` (admin según el contrato, D-6), ya que `alert-dispatcher-service` tampoco tiene Spring Security. Se resuelve en T-40: el filtro del gateway debe chequear el claim `role` para estas rutas puntuales, o se documenta como limitación aceptada. **Corregido en el código de T-40** (`JwtValidationFilter` responde `403 FORBIDDEN`; probado con el jar del gateway suelto); falta confirmarlo con el stack completo.
 - [x] **R-8 · La URI de Mongo de `match-ingestion-service` se ignora en Boot 4.** `application.yaml` usaba `spring.data.mongodb.uri` y el compose `SPRING_DATA_MONGODB_URI`, pero en Spring Boot 4 la property pasó a `spring.mongodb.uri` (el metadata de `spring-boot-mongodb-4.1.0.jar` marca la vieja como *deprecated* nivel `error`: ya no se bindea). El servicio intentaría conectarse a `localhost:27017` dentro del contenedor. T-02 no lo detectó porque sin repositorios el driver nunca se conecta. Corregido en el código de T-20 (ver [plan](plan_20_modelo_partidos_eventos.md)); confirmado en Docker el 2026-09-26: `match-ingestion-service` conecta contra `mongo:27017` del compose y sirve los partidos semilla.
 - [ ] **R-9 · `docker compose up` (sin `--build`) reusa imágenes viejas en silencio.** Detectado el 2026-09-26 al verificar el carril B: tras `git pull` con el commit de T-20 a T-31, `docker compose up -d` levantó los contenedores con las imágenes cacheadas de días antes (ninguna incluía ni el código nuevo de `match-ingestion-service`/`alert-dispatcher-service` ni los fixes de la revisión de `fan-identity-service`). Como el healthcheck es solo TCP (R-6), los contenedores igual quedaban `healthy` corriendo código viejo: `GET /api/matches` daba `404` porque el `MatchController` de esa imagen no existía todavía. Se resolvió con `docker compose up -d --build`. **No hay tarea que lo corrija de raíz** (depende de acordarse de pasar `--build` después de cada `pull`); queda como algo a tener presente en el coloquio y candidato a mencionar en `docs/explicacion_docker_compose.md`.
+- [ ] **R-10 · El timeout de Feign de T-31 se ignora en silencio.** `alert-dispatcher-service/application.yaml` lo configura bajo `feign.client.config.fan-identity-service`, pero en Spring Cloud OpenFeign 4+ el prefijo es `spring.cloud.openfeign.client` (verificado en `FeignClientProperties` de `spring-cloud-openfeign-core-5.0.2.jar`). Una property mal escrita no da error: el callback de notificación usa el default de Feign (60 s de lectura) en vez de 3 s. La verificación de T-31 sigue siendo válida (no ejercitaba ese caso), pero la mitigación documentada en `explicacion_circuit_breaker.md` no está activa. Se corrige en T-41 (ver [plan](plan_41_blindar_endpoints_internos.md)), que toca la misma configuración. **Corregido en el código de T-41**: el bloque pasó a `spring.cloud.openfeign.client.config`, y `AlertDispatcherServiceApplicationTests` verifica que el timeout se aplique (en verde; con un override a otro valor falla, así que el test no es vacío).
 
 ---
 
@@ -321,7 +322,9 @@ La Fase 0 y la Fase 2 se hacen **juntos**: definen contratos y tocan puntos de i
 
 ### Fase 2 — Integración y seguridad (los tres juntos)
 
-- [ ] **T-40 · Seguridad y CORS en el gateway** — `cloud-gateway` · depende de: T-11 · todos
+> **Estado 2026-09-29:** T-40 y T-41 están **implementadas** siguiendo sus `plan_*`, pero **sin verificar con el stack completo** (Docker apagado durante la implementación). Se probó lo que no depende de Docker: el filtro JWT y el CORS del gateway corriendo el jar suelto (`401`/`403`/preflight/path traversal dan lo esperado), `mvn test` en verde en `cloud-gateway` y `alert-dispatcher-service` (incluido el test de R-10), y `fan-identity-service` compila. T-42 es justamente esa verificación completa: no tiene código propio. Antes de levantar: `cp .env.example .env` (nuevo en T-40; sin ese archivo falla cualquier comando de compose, incluso `down`). Una revisión de código previa al push agregó cuatro ajustes, verificados con el jar del gateway y `mvn test`: la regla de admin pasó a "toda escritura sobre `/api/matches/**`", un `role` con tipo inesperado da `401` en vez de `500`, los filtros del gateway corren después del de observación de Actuator (los `401`/`403` se miden), y el header interno se manda solo desde `FanIdentityClient`.
+
+- [ ] **T-40 · Seguridad y CORS en el gateway** — `cloud-gateway` · depende de: T-11 · todos · [plan](plan_40_seguridad_cors_gateway.md)
   - **Qué:** filtro que valida el JWT en el gateway, lista de rutas públicas y configuración de CORS para el frontend.
   - **Por qué:** el gateway es el único punto de entrada; validar ahí evita repetir seguridad en cada microservicio. Sin CORS, el frontend no puede consumir nada.
   - **Afecta:** `cloud-gateway` (config y filtro), `pom.xml`.
@@ -331,8 +334,9 @@ La Fase 0 y la Fase 2 se hacen **juntos**: definen contratos y tocan puntos de i
     - [ ] El gateway propaga el token al microservicio de destino.
     - [ ] CORS habilitado para el origen del frontend.
   - **Terminada cuando:** desde el navegador se puede loguear y consumir endpoints protegidos, y un token adulterado se rechaza en el gateway.
+  - **Documentado en:** [explicacion_seguridad.md](explicacion_seguridad.md) (junto con T-11 y T-41).
 
-- [ ] **T-41 · Blindar los endpoints internos** — `cloud-gateway`, `fan-identity-service` · depende de: T-40, T-13, T-14 · todos
+- [ ] **T-41 · Blindar los endpoints internos** — `cloud-gateway`, `fan-identity-service` · depende de: T-40, T-13, T-14 · todos · [plan](plan_41_blindar_endpoints_internos.md)
   - **Qué:** verificar que los endpoints internos (suscriptores por equipo y callback de notificaciones) no sean alcanzables desde el host, y protegerlos entre servicios.
   - **Por qué:** el callback de notificaciones escribe en la base sin JWT de usuario; si queda expuesto, cualquiera puede inyectar notificaciones a cualquier fan.
   - **Afecta:** rutas del gateway, `SecurityFilterChain` de fan-identity, `docker-compose.yml`.
@@ -341,8 +345,9 @@ La Fase 0 y la Fase 2 se hacen **juntos**: definen contratos y tocan puntos de i
     - [ ] La llamada interna entre servicios se autentica (secreto compartido por variable de entorno).
     - [ ] El secreto no queda hardcodeado en el código.
   - **Terminada cuando:** los endpoints internos funcionan entre contenedores y devuelven 404/401 desde afuera.
+  - **Documentado en:** [explicacion_seguridad.md](explicacion_seguridad.md).
 
-- [ ] **T-42 · Verificación del flujo de punta a punta** — transversal · depende de: T-30, T-40, T-41 · todos
+- [ ] **T-42 · Verificación del flujo de punta a punta** — transversal · depende de: T-30, T-40, T-41 · todos · [plan](plan_42_flujo_punta_a_punta.md)
   - **Qué:** ejercitar el recorrido completo: registro → login → buscar equipo → suscribirse → ingestar evento → ver la notificación.
   - **Por qué:** es exactamente la demo del coloquio; hay que saber que funciona antes de construir el frontend encima.
   - **Afecta:** ningún código nuevo; puede destapar correcciones en tareas previas.
@@ -364,6 +369,7 @@ La Fase 0 y la Fase 2 se hacen **juntos**: definen contratos y tocan puntos de i
     - [ ] El dashboard muestra al menos: latencia y volumen de requests HTTP, uso de memoria/JVM y estado del circuito de Resilience4J.
     - [ ] Los healthchecks de `docker-compose.yml` pasan a `/actuator/health`.
     - [ ] Los endpoints de Actuator no quedan expuestos públicamente por el gateway.
+  - **Ojo (desde T-40):** el gateway pide JWT para todo lo que no sea `/api/fans/auth/**`, incluido su propio `/actuator/**`. Un healthcheck HTTP a `/actuator/health` o Prometheus scrapeando `/actuator/prometheus` del gateway van a recibir `401`. Hay que resolverlo explícitamente (abrir esas rutas en `JwtValidationFilter.isPublic`, o mover Actuator a un `management.server.port` aparte que no se publique al host), no con un token de larga duración.
   - **Terminada cuando:** generando tráfico con el flujo de T-42, las métricas se mueven en el dashboard de Grafana.
 
 - [ ] **T-51 · Almacén centralizado de logs** — transversal · depende de: T-50 · carril C

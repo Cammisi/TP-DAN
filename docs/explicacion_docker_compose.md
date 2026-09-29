@@ -163,6 +163,7 @@ build:
 - **¿Qué es?** El Gateway es la **puerta de entrada única** a toda la aplicación. En lugar de que el frontend tenga que saber la dirección de cada microservicio, todas las peticiones van al Gateway (`localhost:8080`) y este las redirige internamente al microservicio correspondiente.
 - **`ports: "8080:8080"`**: El frontend se conecta a [http://localhost:8080](http://localhost:8080).
 - **`depends_on`**: Espera a que **todos los microservicios y Eureka** estén saludables antes de iniciar, porque necesita saber a dónde redirigir las peticiones.
+- **`JWT_SECRET`**: El gateway valida la firma de los tokens antes de rutear (T-40), así que necesita **el mismo** secreto con el que los firma `fan-identity-service`. Sale del archivo `.env` (ver [Secretos: el archivo `.env`](#-secretos-el-archivo-env)).
 
 ---
 
@@ -182,6 +183,8 @@ build:
 - **¿Qué hace?** Maneja todo lo relacionado con los **usuarios/fans**: registro, autenticación, perfiles, etc.
 - **Base de datos**: Se conecta a **PostgreSQL** (`postgres:5432/fan_identity_db`) usando las credenciales configuradas.
 - **`SPRING_JPA_HIBERNATE_DDLAUTO: update`**: Crea/actualiza automáticamente las tablas en la base de datos según los modelos de datos definidos en el código Java.
+- **`JWT_SECRET`**: Clave con la que firma los tokens que emite en el login. Es la misma que usa el gateway para validarlos.
+- **`INTERNAL_API_KEY`**: Clave que exige en el header `X-Internal-Api-Key` a quien llame a sus endpoints `/internal/**` (T-41). Hoy el único que los llama es `alert-dispatcher-service`.
 - **`depends_on`**: Necesita que **PostgreSQL** y **Eureka** estén saludables antes de iniciar.
 - **Puerto interno**: 8081 (no se expone directamente; se accede a través del Gateway).
 
@@ -214,11 +217,44 @@ build:
 
 - **¿Qué hace?** **Escucha mensajes de Kafka** y despacha alertas/notificaciones a los fans. Por ejemplo, cuando `match-ingestion-service` publica un evento de nuevo partido, este servicio lo recibe y notifica a los usuarios interesados.
 - **Mensajería**: Se conecta a **Kafka** para consumir eventos.
+- **`INTERNAL_API_KEY`**: La manda en cada llamada a los endpoints internos de `fan-identity-service` (suscriptores por equipo y alta de notificación). Tiene que coincidir con la de `fan-identity-service`.
 - **`depends_on`**: Necesita que **Kafka** y **Eureka** estén saludables.
 - **Puerto interno**: 8083.
 
 > [!TIP]
 > Notá que este servicio **no tiene base de datos propia**. Solo escucha mensajes y actúa, lo cual es un patrón común en arquitecturas orientadas a eventos.
+
+---
+
+## 🔐 Secretos: el archivo `.env`
+
+Los dos secretos del proyecto **no están escritos en el `docker-compose.yml`**: el compose los lee de un archivo `.env` en la raíz del repo, que git ignora. Así cada integrante tiene sus propios valores y ningún secreto queda commiteado.
+
+```yaml
+JWT_SECRET: "${JWT_SECRET:?Falta JWT_SECRET, copiá .env.example a .env}"
+```
+
+- **`${JWT_SECRET}`**: Docker Compose reemplaza esto por el valor de `JWT_SECRET` que encuentre en el `.env` (lee ese archivo solo, sin configurar nada).
+- **`:?mensaje`**: si la variable no existe, `docker compose up` **falla** con ese mensaje en vez de arrancar con un valor vacío. Es preferible a que el servicio arranque con otro secreto y los tokens dejen de validar sin explicación.
+
+La primera vez, antes del primer `docker compose up`:
+
+```bash
+cp .env.example .env
+```
+
+> [!WARNING]
+> Compose resuelve las variables al leer el archivo, así que **cualquier** comando falla sin `.env`, no solo `up`: también `down`, `ps` o `logs`. Si hacés `pull` de este cambio con el stack viejo corriendo, creá el `.env` antes de intentar bajarlo.
+
+`.env.example` sí está en el repo y trae valores de ejemplo que sirven tal cual para desarrollo local. Si cambiás `JWT_SECRET`, tiene que tener al menos 32 caracteres (lo exige el algoritmo HS256).
+
+| Variable | La usan | Para qué |
+|---|---|---|
+| `JWT_SECRET` | `fan-identity-service`, `cloud-gateway` | Firmar (fan-identity) y validar (gateway) los JWT |
+| `INTERNAL_API_KEY` | `fan-identity-service`, `alert-dispatcher-service` | Autenticar las llamadas a `/internal/**` entre servicios |
+
+> [!NOTE]
+> Las credenciales de Postgres (`fan_admin` / `fan_pass123`) siguen escritas en el compose: son una simplificación deliberada del entorno local, previa a este mecanismo.
 
 ---
 
@@ -346,6 +382,7 @@ Esto es clave porque los `depends_on` con `condition: service_healthy` usan esto
 
 | Comando | ¿Qué hace? |
 |---|---|
+| `cp .env.example .env` | Crea el archivo de secretos local (**una sola vez**, antes del primer `up`) |
 | `docker compose up` | Levanta todos los servicios (mostrando los logs en la terminal) |
 | `docker compose up -d` | Levanta todos los servicios en segundo plano (sin mostrar logs) |
 | `docker compose down` | Detiene y elimina todos los contenedores |

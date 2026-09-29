@@ -125,6 +125,7 @@ services:
       SERVER_PORT: 8080
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
       EUREKA_INSTANCE_PREFERIPADDRESS: "true"
+      JWT_SECRET: "${JWT_SECRET:?Falta JWT_SECRET, copiá .env.example a .env}"
     depends_on:
       eureka-server:
         condition: service_healthy
@@ -159,7 +160,8 @@ services:
       SPRING_JPA_HIBERNATE_DDLAUTO: update
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
       EUREKA_INSTANCE_PREFERIPADDRESS: "true"
-      JWT_SECRET: clave-secreta-para-docker-compose-no-usar-en-produccion-al-menos-256-bits
+      JWT_SECRET: "${JWT_SECRET:?Falta JWT_SECRET, copiá .env.example a .env}"
+      INTERNAL_API_KEY: "${INTERNAL_API_KEY:?Falta INTERNAL_API_KEY, copiá .env.example a .env}"
     depends_on:
       postgres:
         condition: service_healthy
@@ -211,6 +213,7 @@ services:
       SPRING_KAFKA_BOOTSTRAPSERVERS: kafka:19092
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
       EUREKA_INSTANCE_PREFERIPADDRESS: "true"
+      INTERNAL_API_KEY: "${INTERNAL_API_KEY:?Falta INTERNAL_API_KEY, copiá .env.example a .env}"
     depends_on:
       kafka:
         condition: service_healthy

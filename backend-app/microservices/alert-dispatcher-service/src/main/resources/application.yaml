@@ -15,18 +15,21 @@ spring:
         spring.deserializer.value.delegate.class: org.springframework.kafka.support.serializer.JacksonJsonDeserializer
         spring.json.value.default.type: com.tpnube.alert_dispatcher_service.dto.MatchEventDTO
         spring.json.use.type.headers: false
+  cloud:
+    openfeign:
+      client:
+        config:
+          fan-identity-service:
+            connect-timeout: 1000
+            read-timeout: 3000 # el callback de notificación no pasa por el Circuit Breaker (ver explicacion_circuit_breaker.md)
 
 eureka:
   client:
     service-url:
       defaultZone: http://localhost:8761/eureka/
 
-feign:
-  client:
-    config:
-      fan-identity-service:
-        connect-timeout: 1000
-        read-timeout: 3000 # el callback de notificación no pasa por el Circuit Breaker (ver CLAUDE.md)
+internal:
+  api-key: ${INTERNAL_API_KEY:dev-internal-api-key}
 
 topics:
   match-events: match-events

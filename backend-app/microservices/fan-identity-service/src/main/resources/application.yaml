@@ -21,3 +21,6 @@ eureka:
 jwt:
   secret: default-dev-secret-key-que-tiene-al-menos-256-bits-para-hs256
   expiration-ms: 86400000
+
+internal:
+  api-key: ${INTERNAL_API_KEY:dev-internal-api-key}

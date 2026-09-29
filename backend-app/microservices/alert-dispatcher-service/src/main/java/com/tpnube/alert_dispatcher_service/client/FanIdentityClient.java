@@ -14,7 +14,7 @@ import java.util.List;
 // Cliente Feign hacia fan-identity-service, resuelto vía Eureka (spring-cloud-loadbalancer).
 // Paths internos (fuera de /api/**, contrato T-01 secciones 2.3 y 2.5): el gateway no los
 // rutea, solo alcanzables dentro de la red de Docker.
-@FeignClient(name = "fan-identity-service")
+@FeignClient(name = "fan-identity-service", configuration = FanIdentityClientConfiguration.class)
 public interface FanIdentityClient {
 
     @GetMapping("/internal/fans/subscribers/{teamId}")
