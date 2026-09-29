@@ -40,7 +40,7 @@ Estado del código backend, actualizado a medida que se implementan tareas.
 | Mensajería asincrónica | ✅ | T-23, T-30 (verificados) |
 | Spring Cloud Gateway + Eureka | ✅ | T-02 (verificado) |
 | Ejecución en contenedores Docker | ✅ | T-02 (verificado) |
-| Seguridad | 🟡 | T-11 (verificado), T-40, T-41 (implementados, sin verificar) |
+| Seguridad | ✅ | T-11, T-40, T-41, T-42 (verificados) |
 | Almacén centralizado de logs | 🔴 | T-51 |
 | Telemetría de métricas de rendimiento | 🔴 | T-50 |
 | 1 característica extra (Resilience4J) | ✅ | T-31 (verificado) |
@@ -322,40 +322,38 @@ La Fase 0 y la Fase 2 se hacen **juntos**: definen contratos y tocan puntos de i
 
 ### Fase 2 — Integración y seguridad (los tres juntos)
 
-> **Estado 2026-09-29:** T-40 y T-41 están **implementadas** siguiendo sus `plan_*`, pero **sin verificar con el stack completo** (Docker apagado durante la implementación). Se probó lo que no depende de Docker: el filtro JWT y el CORS del gateway corriendo el jar suelto (`401`/`403`/preflight/path traversal dan lo esperado), `mvn test` en verde en `cloud-gateway` y `alert-dispatcher-service` (incluido el test de R-10), y `fan-identity-service` compila. T-42 es justamente esa verificación completa: no tiene código propio. Antes de levantar: `cp .env.example .env` (nuevo en T-40; sin ese archivo falla cualquier comando de compose, incluso `down`). Una revisión de código previa al push agregó cuatro ajustes, verificados con el jar del gateway y `mvn test`: la regla de admin pasó a "toda escritura sobre `/api/matches/**`", un `role` con tipo inesperado da `401` en vez de `500`, los filtros del gateway corren después del de observación de Actuator (los `401`/`403` se miden), y el header interno se manda solo desde `FanIdentityClient`.
-
-- [ ] **T-40 · Seguridad y CORS en el gateway** — `cloud-gateway` · depende de: T-11 · todos · [plan](plan_40_seguridad_cors_gateway.md)
+- [x] **T-40 · Seguridad y CORS en el gateway** — `cloud-gateway` · depende de: T-11 · todos · [plan](plan_40_seguridad_cors_gateway.md)
   - **Qué:** filtro que valida el JWT en el gateway, lista de rutas públicas y configuración de CORS para el frontend.
   - **Por qué:** el gateway es el único punto de entrada; validar ahí evita repetir seguridad en cada microservicio. Sin CORS, el frontend no puede consumir nada.
   - **Afecta:** `cloud-gateway` (config y filtro), `pom.xml`.
   - **Requisitos:**
-    - [ ] Request sin token o con token inválido a una ruta protegida devuelve 401 sin llegar al microservicio.
-    - [ ] Rutas de auth accesibles sin token.
-    - [ ] El gateway propaga el token al microservicio de destino.
-    - [ ] CORS habilitado para el origen del frontend.
-  - **Terminada cuando:** desde el navegador se puede loguear y consumir endpoints protegidos, y un token adulterado se rechaza en el gateway.
+    - [x] Request sin token o con token inválido a una ruta protegida devuelve 401 sin llegar al microservicio.
+    - [x] Rutas de auth accesibles sin token.
+    - [x] El gateway propaga el token al microservicio de destino.
+    - [x] CORS habilitado para el origen del frontend.
+  - **Terminada cuando:** desde el navegador se puede loguear y consumir endpoints protegidos, y un token adulterado se rechaza en el gateway. ✅ Verificado en Docker (2026-09-29): request sin token y con token adulterado dan 401 directo en el gateway; login/registro son públicos; rol ADMIN verificado con 403 ante fans en ingesta.
   - **Documentado en:** [explicacion_seguridad.md](explicacion_seguridad.md) (junto con T-11 y T-41).
 
-- [ ] **T-41 · Blindar los endpoints internos** — `cloud-gateway`, `fan-identity-service` · depende de: T-40, T-13, T-14 · todos · [plan](plan_41_blindar_endpoints_internos.md)
+- [x] **T-41 · Blindar los endpoints internos** — `cloud-gateway`, `fan-identity-service` · depende de: T-40, T-13, T-14 · todos · [plan](plan_41_blindar_endpoints_internos.md)
   - **Qué:** verificar que los endpoints internos (suscriptores por equipo y callback de notificaciones) no sean alcanzables desde el host, y protegerlos entre servicios.
   - **Por qué:** el callback de notificaciones escribe en la base sin JWT de usuario; si queda expuesto, cualquiera puede inyectar notificaciones a cualquier fan.
   - **Afecta:** rutas del gateway, `SecurityFilterChain` de fan-identity, `docker-compose.yml`.
   - **Requisitos:**
-    - [ ] Ningún endpoint interno responde desde `localhost:8080`.
-    - [ ] La llamada interna entre servicios se autentica (secreto compartido por variable de entorno).
-    - [ ] El secreto no queda hardcodeado en el código.
-  - **Terminada cuando:** los endpoints internos funcionan entre contenedores y devuelven 404/401 desde afuera.
+    - [x] Ningún endpoint interno responde desde `localhost:8080`.
+    - [x] La llamada interna entre servicios se autentica (secreto compartido por variable de entorno).
+    - [x] El secreto no queda hardcodeado en el código.
+  - **Terminada cuando:** los endpoints internos funcionan entre contenedores y devuelven 404/401 desde afuera. ✅ Verificado en Docker (2026-09-29): `/internal/**` devuelve 404 desde el host a través del gateway; entre servicios `alert-dispatcher-service` se autentica usando `INTERNAL_API_KEY` de `.env` vía `FanIdentityClient` y las alertas se persisten correctamente.
   - **Documentado en:** [explicacion_seguridad.md](explicacion_seguridad.md).
 
-- [ ] **T-42 · Verificación del flujo de punta a punta** — transversal · depende de: T-30, T-40, T-41 · todos · [plan](plan_42_flujo_punta_a_punta.md)
+- [x] **T-42 · Verificación del flujo de punta a punta** — transversal · depende de: T-30, T-40, T-41 · todos · [plan](plan_42_flujo_punta_a_punta.md)
   - **Qué:** ejercitar el recorrido completo: registro → login → buscar equipo → suscribirse → ingestar evento → ver la notificación.
   - **Por qué:** es exactamente la demo del coloquio; hay que saber que funciona antes de construir el frontend encima.
   - **Afecta:** ningún código nuevo; puede destapar correcciones en tareas previas.
   - **Requisitos:**
-    - [ ] El recorrido completo funciona pasando siempre por el gateway.
-    - [ ] Quedan registrados los pasos exactos para reproducirlo.
-    - [ ] Los errores encontrados se corrigen o se anotan como tareas nuevas en este documento.
-  - **Terminada cuando:** el flujo se puede reproducir desde cero con `docker compose down -v && docker compose up --build`.
+    - [x] El recorrido completo funciona pasando siempre por el gateway.
+    - [x] Quedan registrados los pasos exactos para reproducirlo.
+    - [x] Los errores encontrados se corrigen o se anotan como tareas nuevas en este documento.
+  - **Terminada cuando:** el flujo se puede reproducir desde cero con `docker compose down -v && docker compose up --build`. ✅ Verificado en Docker (2026-09-29): stack levantado desde cero con volúmenes limpios; se corrieron en secuencia los 16 pasos de `plan_42_flujo_punta_a_punta.md` sin fallas. Se confirmó el fan-out vía Kafka, el registro de alerta en Postgres, la consulta de alertas por el fan, el estado `CLOSED` de Resilience4J y la persistencia de suscripciones y alertas tras `docker compose restart`.
 
 ### Fase 3 — Requisitos transversales del enunciado
 
@@ -498,10 +496,10 @@ La Fase 0 y la Fase 2 se hacen **juntos**: definen contratos y tocan puntos de i
 |---|---|---|
 | 0 — Cimientos | 3 | 3 |
 | 1 — Núcleo de dominio | 12 | 12 |
-| 2 — Integración y seguridad | 3 | 0 |
+| 2 — Integración y seguridad | 3 | 3 |
 | 3 — Requisitos transversales | 2 | 0 |
 | 4 — Frontend | 6 | 0 |
 | 5 — Cierre y entrega | 4 | 0 |
-| **Total** | **30** | **15** |
+| **Total** | **30** | **18** |
 
 Actualizar esta tabla al cerrar cada tarea.
