@@ -40,7 +40,7 @@ public class SecurityConfig {
                             "FORBIDDEN", "No tenés permiso para acceder a este recurso"))
             )
             .authorizeHttpRequests(auth -> auth
-                .requestMatchers("/api/fans/auth/**", "/error").permitAll()
+                .requestMatchers("/api/fans/auth/**", "/error", "/actuator/**").permitAll()
                 .requestMatchers("/internal/**").hasRole("INTERNAL")
                 .anyRequest().authenticated()
             )

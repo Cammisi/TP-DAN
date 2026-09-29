@@ -1,0 +1,29 @@
+global:
+  scrape_interval: 5s
+  evaluation_interval: 5s
+
+scrape_configs:
+  - job_name: 'eureka-server'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets: ['eureka-server:8761']
+
+  - job_name: 'cloud-gateway'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets: ['cloud-gateway:8084']
+
+  - job_name: 'fan-identity-service'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets: ['fan-identity-service:8081']
+
+  - job_name: 'match-ingestion-service'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets: ['match-ingestion-service:8082']
+
+  - job_name: 'alert-dispatcher-service'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets: ['alert-dispatcher-service:8083']

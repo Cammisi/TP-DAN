@@ -374,8 +374,9 @@ Todos los servicios tienen un bloque `healthcheck`. Esto le dice a Docker **cóm
 
 Esto es clave porque los `depends_on` con `condition: service_healthy` usan estos healthchecks para **no iniciar un servicio hasta que sus dependencias estén realmente listas**.
 
-**Caso particular — `kafka` con `timeout: 12s`:** el resto de los servicios usan `5s`, pero el comando que chequea a Kafka (`kafka-broker-api-versions.sh`) levanta su propia JVM cliente para consultar al broker, y eso solo tarda unos ~7 segundos. Con `5s` el healthcheck fallaba siempre (no por falta de recursos de la máquina, el comando corriendo a mano tarda lo mismo), así que `kafka` quedaba `unhealthy` de forma permanente y bloqueaba a `alert-dispatcher-service` y `match-ingestion-service` (que dependen de que esté `healthy` para arrancar).
+**Healthchecks HTTP con Actuator (T-50):** los 5 microservicios Spring Boot fueron migrados de chequeos TCP básicos a consultas HTTP reales a su endpoint `/actuator/health` mediante `curl -f`. Esto garantiza que el servicio no solo abra su puerto de red, sino que Spring Boot haya completado su ciclo de vida y sus componentes internos estén en estado `UP`. Para `cloud-gateway`, el healthcheck consulta el puerto de gestión interna `8084` (`management.server.port`) para no interferir con las rutas públicas ni el filtro de seguridad JWT del puerto `8080`.
 
+**Caso particular — `kafka` con `timeout: 12s`:** el resto de los servicios usan `5s`, pero el comando que chequea a Kafka (`kafka-broker-api-versions.sh`) levanta su propia JVM cliente para consultar al broker, y eso solo tarda unos ~7 segundos. Con `5s` el healthcheck fallaba siempre (no por falta de recursos de la máquina, el comando corriendo a mano tarda lo mismo), así que `kafka` quedaba `unhealthy` de forma permanente y bloqueaba a `alert-dispatcher-service` y `match-ingestion-service` (que dependen de que esté `healthy` para arrancar).
 ---
 
 ## 🚀 Comandos útiles
@@ -402,3 +403,5 @@ Una vez que todo esté corriendo, podés acceder a:
 | API Gateway (punto de entrada) | [http://localhost:8080](http://localhost:8080) |
 | Eureka (panel de servicios) | [http://localhost:8761](http://localhost:8761) |
 | Kafka UI (monitor de mensajes) | [http://localhost:8090](http://localhost:8090) |
+| Prometheus (métricas scrapeadas) | [http://localhost:9090](http://localhost:9090) |
+| Grafana (dashboard de telemetría) | [http://localhost:3001](http://localhost:3001) |

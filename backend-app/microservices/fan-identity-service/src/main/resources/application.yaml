@@ -24,3 +24,17 @@ jwt:
 
 internal:
   api-key: ${INTERNAL_API_KEY:dev-internal-api-key}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,prometheus,info
+  endpoint:
+    health:
+      show-details: always
+      probes:
+        enabled: true
+  metrics:
+    tags:
+      application: ${spring.application.name}

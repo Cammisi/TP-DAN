@@ -36,10 +36,20 @@ eureka:
     prefer-ip-address: true
 
 management:
+  server:
+    port: 8084
   endpoints:
     web:
       exposure:
-        include: health,gateway
+        include: health,prometheus,info,gateway
+  endpoint:
+    health:
+      show-details: always
+      probes:
+        enabled: true
+  metrics:
+    tags:
+      application: ${spring.application.name}
 
 jwt:
   secret: default-dev-secret-key-que-tiene-al-menos-256-bits-para-hs256 # tiene que coincidir con el de fan-identity

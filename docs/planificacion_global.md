@@ -42,7 +42,7 @@ Estado del código backend, actualizado a medida que se implementan tareas.
 | Ejecución en contenedores Docker | ✅ | T-02 (verificado) |
 | Seguridad | ✅ | T-11, T-40, T-41, T-42 (verificados) |
 | Almacén centralizado de logs | 🔴 | T-51 |
-| Telemetría de métricas de rendimiento | 🔴 | T-50 |
+| Telemetría de métricas de rendimiento | ✅ | T-50 (verificado) |
 | 1 característica extra (Resilience4J) | ✅ | T-31 (verificado) |
 
 ---
@@ -357,18 +357,18 @@ La Fase 0 y la Fase 2 se hacen **juntos**: definen contratos y tocan puntos de i
 
 ### Fase 3 — Requisitos transversales del enunciado
 
-- [ ] **T-50 · Telemetría de métricas de rendimiento** — los 5 servicios Spring + compose · depende de: T-02 · carril C
+- [x] **T-50 · Telemetría de métricas de rendimiento** — los 5 servicios Spring + compose · depende de: T-02 · carril C
   - **Qué:** Actuator + Micrometer con registro Prometheus en los 5 servicios, Prometheus y Grafana en el compose, y un dashboard con las métricas clave.
   - **Por qué:** es uno de los requisitos obligatorios del enunciado. De paso permite migrar los healthchecks TCP a `/actuator/health` (R-6).
   - **Afecta:** los 5 `pom.xml` y `application.yaml`, `docker-compose.yml`, configuración de Prometheus y Grafana.
   - **Requisitos:**
-    - [ ] Los 5 servicios exponen `/actuator/prometheus`.
-    - [ ] Prometheus scrapea a los 5 y Grafana los grafica.
-    - [ ] El dashboard muestra al menos: latencia y volumen de requests HTTP, uso de memoria/JVM y estado del circuito de Resilience4J.
-    - [ ] Los healthchecks de `docker-compose.yml` pasan a `/actuator/health`.
-    - [ ] Los endpoints de Actuator no quedan expuestos públicamente por el gateway.
-  - **Ojo (desde T-40):** el gateway pide JWT para todo lo que no sea `/api/fans/auth/**`, incluido su propio `/actuator/**`. Un healthcheck HTTP a `/actuator/health` o Prometheus scrapeando `/actuator/prometheus` del gateway van a recibir `401`. Hay que resolverlo explícitamente (abrir esas rutas en `JwtValidationFilter.isPublic`, o mover Actuator a un `management.server.port` aparte que no se publique al host), no con un token de larga duración.
-  - **Terminada cuando:** generando tráfico con el flujo de T-42, las métricas se mueven en el dashboard de Grafana.
+    - [x] Los 5 servicios exponen `/actuator/prometheus`.
+    - [x] Prometheus scrapea a los 5 y Grafana los grafica.
+    - [x] El dashboard muestra al menos: latencia y volumen de requests HTTP, uso de memoria/JVM y estado del circuito de Resilience4J.
+    - [x] Los healthchecks de `docker-compose.yml` pasan a `/actuator/health`.
+    - [x] Los endpoints de Actuator no quedan expuestos públicamente por el gateway.
+  - **Ojo (desde T-40):** el gateway pide JWT para todo lo que no sea `/api/fans/auth/**`, incluido su propio `/actuator/**`. Se resolvió moviendo Actuator a `management.server.port: 8084` interno y no publicándolo al host. Las peticiones a `localhost:8080/actuator/**` reciben 401.
+  - **Terminada cuando:** generando tráfico con el flujo de T-42, las métricas se mueven en el dashboard de Grafana. ✅ Verificado en Docker (2026-09-29): los 11 contenedores arrancaron saludables con healthchecks HTTP reales vía `curl`; Prometheus scrapea a los 5 targets en estado `UP`; Grafana arranca en `http://localhost:3001` con datasource y dashboard aprovisionados automáticamente; se generó tráfico y se verificaron en Prometheus y Grafana las series de requests HTTP por servicio, memoria JVM Heap y estado `CLOSED` de Resilience4J; Actuator queda blindado de accesos externos (401 en puerto 8080).
 
 - [ ] **T-51 · Almacén centralizado de logs** — transversal · depende de: T-50 · carril C
   - **Qué:** Loki + Promtail en el compose, logs de los 5 servicios en formato consistente y un identificador de correlación que permita seguir un evento a través de los servicios.
@@ -497,9 +497,9 @@ La Fase 0 y la Fase 2 se hacen **juntos**: definen contratos y tocan puntos de i
 | 0 — Cimientos | 3 | 3 |
 | 1 — Núcleo de dominio | 12 | 12 |
 | 2 — Integración y seguridad | 3 | 3 |
-| 3 — Requisitos transversales | 2 | 0 |
+| 3 — Requisitos transversales | 2 | 1 |
 | 4 — Frontend | 6 | 0 |
 | 5 — Cierre y entrega | 4 | 0 |
-| **Total** | **30** | **18** |
+| **Total** | **30** | **19** |
 
 Actualizar esta tabla al cerrar cada tarea.
