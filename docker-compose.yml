@@ -229,6 +229,33 @@ services:
       - tp-nube-network
 
   # ------------------------------------------------------------------
+  # Frontend
+  # ------------------------------------------------------------------
+
+  frontend-app:
+    build:
+      context: ./frontend-app
+      args:
+        # Build-time: Next.js inlinea NEXT_PUBLIC_* en el bundle del browser.
+        # Apunta a localhost porque quien lo resuelve es el navegador del usuario,
+        # no otro contenedor de la red Docker.
+        NEXT_PUBLIC_GATEWAY_URL: http://localhost:8080
+    container_name: frontend-app
+    ports:
+      - "3000:3000"
+    depends_on:
+      cloud-gateway:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:3000/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 8
+      start_period: 30s
+    networks:
+      - tp-nube-network
+
+  # ------------------------------------------------------------------
   # Observabilidad y Telemetría (T-50)
   # ------------------------------------------------------------------
 

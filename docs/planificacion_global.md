@@ -21,10 +21,10 @@ Estado del código backend, actualizado a medida que se implementan tareas.
 | `eureka-server` | ✅ Hecho | App + `application.yaml` + Dockerfile. Verificado en ejecución (T-02); necesitó agregar `@EnableEurekaServer`. |
 | `cloud-gateway` | ✅ Hecho | Rutas hacia los 3 MS, validación del JWT, rol admin en las rutas de admin y CORS (T-40). Verificado con el stack completo el 2026-09-30. |
 | `docker-compose.yml` | ✅ Hecho | Postgres, Mongo, Kafka (KRaft), Kafka UI, los 5 servicios Spring, red y volúmenes. Verificado: `docker compose up --build` deja los 9 contenedores `healthy` (T-02). |
-| `fan-identity-service` | ✅ Hecho (carril A) | Modelo de datos y catálogo (T-10), auth con JWT (T-11), suscripciones (T-12), suscriptores por equipo (T-13), historial de notificaciones (T-14) y catálogo de ligas/equipos (T-15). Falta blindar los endpoints internos con secreto compartido (T-41). |
+| `fan-identity-service` | ✅ Hecho (carril A) | Modelo de datos y catálogo (T-10), auth con JWT (T-11), suscripciones (T-12), suscriptores por equipo (T-13), historial de notificaciones (T-14), catálogo de ligas/equipos (T-15) y endpoints internos blindados con `INTERNAL_API_KEY` (T-41). |
 | `match-ingestion-service` | ✅ Hecho (carril B) | Documentos Mongo y semilla (T-20), ingesta de eventos (T-21), consulta de partidos/eventos (T-22) y productor Kafka (T-23). Verificado en Docker el 2026-09-26. |
 | `alert-dispatcher-service` | ✅ Hecho (carril B) | Consumer Kafka y orquestación del fan-out (T-30), fallback real que registra no despachados y `GET /api/alerts/status` (T-31). Verificado en Docker el 2026-09-26, incluida la apertura/cierre real del circuito. |
-| `frontend-app` | 🔴 No existe | La carpeta no está en el repo. Se crea en T-60. |
+| `frontend-app` | ✅ Hecho (carril C) | Next.js Pages Router: scaffolding (T-60), API/sesión (T-61), login/registro (T-62), catálogo/suscripciones (T-63), centro de alertas (T-64) y panel de admin (T-65). Verificado en Docker el 2026-09-30. Falta el muro de partidos en vivo del mockup (ver T-66, propuesta). |
 | Seguridad (JWT) | ✅ Hecho | Emisión y validación del JWT en fan-identity (T-11). Validación en el gateway, rol admin, CORS (T-40) y clave compartida para los endpoints internos (T-41). Verificado con el stack completo el 2026-09-30 (ver `docs/explicacion_seguridad.md`). |
 | Mensajería (Kafka) | ✅ Hecho | Productor (`match-ingestion-service`, T-23) y consumer (`alert-dispatcher-service`, T-30) con el esquema de T-01. Verificado contra Kafka real el 2026-09-26 (ver `docs/explicacion_mensajeria_kafka.md`). |
 | Logs centralizados | ✅ Hecho | Loki + Promtail (T-51). Verificado el 2026-09-30: logs de los 13 contenedores indexados por `service`/`level`, correlación por `eventId` confirmada entre los tres microservicios. |
@@ -35,7 +35,7 @@ Estado del código backend, actualizado a medida que se implementan tareas.
 
 | Requisito del enunciado | Estado | Se resuelve en |
 |---|---|---|
-| ≥ 3 microservicios Spring Boot + 1 frontend | 🟡 | Fase 1 + Fase 4 |
+| ≥ 3 microservicios Spring Boot + 1 frontend | ✅ | Fase 1 + T-60 a T-65 (verificados) |
 | 1 base SQL + 1 NoSQL, 1 microservicio ≠ 2 bases | ✅ | T-10, T-20 (verificados) |
 | Mensajería asincrónica | ✅ | T-23, T-30 (verificados) |
 | Spring Cloud Gateway + Eureka | ✅ | T-02 (verificado) |
@@ -384,66 +384,76 @@ La Fase 0 y la Fase 2 se hacen **juntos**: definen contratos y tocan puntos de i
 
 ### Fase 4 — Frontend
 
-- [ ] **T-60 · Scaffolding de `frontend-app`** — `frontend-app/` · depende de: T-02 · carril C
+- [x] **T-60 · Scaffolding de `frontend-app`** — `frontend-app/` · depende de: T-02 · carril C · [plan](plan_60_scaffolding_frontend.md)
   - **Qué:** crear el proyecto Next.js (Pages Router), su Dockerfile y su servicio en `docker-compose.yml`, apuntando al gateway.
   - **Por qué:** es el cuarto componente que exige el enunciado y hoy la carpeta no existe (R-2). Puede arrancar en paralelo con la Fase 1.
   - **Afecta:** `frontend-app/`, `docker-compose.yml`, `.gitignore`.
   - **Requisitos:**
-    - [ ] Proyecto Next.js con Pages Router que levanta en desarrollo.
-    - [ ] La URL del gateway se lee de variable de entorno, nunca hardcodeada.
-    - [ ] Dockerfile funcional y servicio agregado al compose.
-    - [ ] Una página inicial que confirme que el contenedor responde.
-  - **Terminada cuando:** `docker compose up --build` levanta también el frontend y se accede desde el navegador.
+    - [x] Proyecto Next.js con Pages Router que levanta en desarrollo.
+    - [x] La URL del gateway se lee de variable de entorno, nunca hardcodeada.
+    - [x] Dockerfile funcional y servicio agregado al compose.
+    - [x] Una página inicial que confirme que el contenedor responde.
+  - **Terminada cuando:** `docker compose up --build` levanta también el frontend y se accede desde el navegador. ✅ Verificado el 2026-09-30: `docker compose up -d --build frontend-app` deja el contenedor `healthy` y `http://localhost:3000` responde `200`. Encontrado y corregido un bug real en el camino: el server standalone de Next.js escuchaba solo en la IP interna del contenedor (no en `0.0.0.0`) porque heredaba el `HOSTNAME` que Docker setea automáticamente — ver gotcha en `CLAUDE.md`.
 
-- [ ] **T-61 · Capa de acceso a la API y sesión** — `frontend-app/` · depende de: T-60, T-01 · carril C
+- [x] **T-61 · Capa de acceso a la API y sesión** — `frontend-app/` · depende de: T-60, T-01 · carril C · [plan](plan_61_api_sesion.md)
   - **Qué:** un único módulo cliente que hable con el gateway, guarde el JWT, lo adjunte a cada request y maneje el 401.
   - **Por qué:** centralizar esto evita repetir `fetch` y manejo de token en cada pantalla.
   - **Afecta:** `frontend-app/` (servicios y contexto de sesión).
   - **Requisitos:**
-    - [ ] Todas las llamadas pasan por este módulo y por el gateway, nunca directo a un microservicio.
-    - [ ] El token se adjunta automáticamente y el 401 redirige al login.
-    - [ ] Rutas privadas inaccesibles sin sesión.
-  - **Terminada cuando:** ninguna pantalla hace `fetch` por su cuenta ni conoce puertos de microservicios.
+    - [x] Todas las llamadas pasan por este módulo y por el gateway, nunca directo a un microservicio.
+    - [x] El token se adjunta automáticamente y el 401 redirige al login.
+    - [x] Rutas privadas inaccesibles sin sesión.
+  - **Terminada cuando:** ninguna pantalla hace `fetch` por su cuenta ni conoce puertos de microservicios. ✅ `lib/api.js` es el único lugar que llama `fetch` en todo `frontend-app` (grep confirma que ninguna página lo hace directo); `RequireAuth` (usado por T-63/T-64/T-65) redirige a `/login` sin sesión. Sin browser disponible en este entorno para grabar la interacción real: verificado simulando con `curl` exactamente los mismos requests que hace cada función de `lib/api.js` contra el gateway real, todos con el resultado esperado.
+  - **Bug real encontrado por el usuario probando en el browser (2026-09-30):** `POST /api/fans/auth/login` no devuelve `email` en el contrato (solo `token`/`fanId`/`role`), pero la sesión guardada en `localStorage` lo necesitaba para mostrarlo en la UI (T-63/T-64/T-65). `curl` no lo detectó porque nunca ejercita `localStorage` ni el estado de React. Corregido en `SessionContext.login`: se guarda el `email` que el usuario ya tipeó junto con la respuesta del backend.
 
-- [ ] **T-62 · Pantallas de registro y login** — `frontend-app/` · depende de: T-61, T-11 · carril C
+- [x] **T-62 · Pantallas de registro y login** — `frontend-app/` · depende de: T-61, T-11 · carril C · [plan](plan_62_pantallas_auth.md)
   - **Qué:** las pantallas de acceso del fan, siguiendo el mockup de la resolución.
   - **Por qué:** es la puerta de entrada de la aplicación y de la demo.
   - **Afecta:** `frontend-app/` (páginas de auth).
   - **Requisitos:**
-    - [ ] Registro y login funcionales contra el gateway.
-    - [ ] Errores del backend (email duplicado, credenciales inválidas) mostrados de forma legible.
-    - [ ] Tras loguear, redirige al panel principal.
-  - **Terminada cuando:** un usuario nuevo se registra, inicia sesión y entra al panel sin tocar la consola.
+    - [x] Registro y login funcionales contra el gateway.
+    - [x] Errores del backend (email duplicado, credenciales inválidas) mostrados de forma legible.
+    - [x] Tras loguear, redirige al panel principal.
+  - **Terminada cuando:** un usuario nuevo se registra, inicia sesión y entra al panel sin tocar la consola. ✅ Verificado el 2026-09-30 con el stack completo en Docker: `/login` y `/register` sirven `200` y compilan sin warnings de ESLint; el flujo de registro→login se probó reproduciendo exactamente las llamadas que hace `lib/api.js` (nuevo fan `fan.frontend@quienjuega.com`, `201` en registro, JWT válido en login). Sin browser disponible en este entorno: no se grabó el click-through real del formulario, solo la lógica que dispara.
 
-- [ ] **T-63 · Catálogo y mis suscripciones** — `frontend-app/` · depende de: T-62, T-12, T-15 · carril C
+- [x] **T-63 · Catálogo y mis suscripciones** — `frontend-app/` · depende de: T-62, T-12, T-15 · carril C · [plan](plan_63_catalogo_suscripciones.md)
   - **Qué:** pantalla de búsqueda de equipos/ligas con seguir/dejar de seguir, y pantalla de suscripciones, según los mockups.
   - **Por qué:** es la funcionalidad principal del rol Fan.
   - **Afecta:** `frontend-app/` (páginas de catálogo y suscripciones).
   - **Requisitos:**
-    - [ ] Búsqueda de equipos por nombre.
-    - [ ] Seguir/dejar de seguir refleja el cambio sin recargar la página.
-    - [ ] El listado de suscripciones muestra nombres de equipo, no identificadores.
-  - **Terminada cuando:** un fan busca un equipo, lo sigue y lo ve aparecer en sus suscripciones.
+    - [x] Búsqueda de equipos por nombre.
+    - [x] Seguir/dejar de seguir refleja el cambio sin recargar la página (estado de React, sin `router.reload()`).
+    - [x] El listado de suscripciones muestra nombres de equipo, no identificadores.
+  - **Terminada cuando:** un fan busca un equipo, lo sigue y lo ve aparecer en sus suscripciones. ✅ Verificado el 2026-09-30: reproduciendo las llamadas de `/subscriptions` contra el stack real — búsqueda de "river" en el catálogo, `POST /api/fans/subscriptions`, y el equipo aparece en `GET /api/fans/subscriptions` con nombre y liga resueltos. **Nota de alcance:** `/` (home autenticada) quedó como un resumen simple, no como el muro de partidos en vivo de `mockup_panel_principal.png` — esa pantalla no está cubierta por ninguna tarea de este documento (ver T-66 propuesta más abajo).
 
-- [ ] **T-64 · Centro de alertas** — `frontend-app/` · depende de: T-62, T-14 · carril C
+- [x] **T-64 · Centro de alertas** — `frontend-app/` · depende de: T-62, T-14 · carril C · [plan](plan_64_centro_alertas.md)
   - **Qué:** pantalla del historial de notificaciones del fan, según el mockup.
   - **Por qué:** cierra el recorrido del Fan y es donde se ve el resultado del flujo asincrónico.
   - **Afecta:** `frontend-app/` (página de alertas).
   - **Requisitos:**
-    - [ ] Notificaciones ordenadas de más nueva a más vieja con su fecha.
-    - [ ] Estado vacío claro cuando el fan todavía no tiene alertas.
-    - [ ] Se puede refrescar para ver alertas nuevas.
-  - **Terminada cuando:** con el fan logueado y un evento ingestado, la alerta aparece en la pantalla.
+    - [x] Notificaciones ordenadas de más nueva a más vieja con su fecha (orden ya garantizado por el backend, T-14; acá se formatea `createdAt`).
+    - [x] Estado vacío claro cuando el fan todavía no tiene alertas.
+    - [x] Se puede refrescar para ver alertas nuevas (botón, sin recargar la página).
+  - **Terminada cuando:** con el fan logueado y un evento ingestado, la alerta aparece en la pantalla. ✅ Verificado el 2026-09-30 de punta a punta: se registró un fan nuevo, se suscribió a River Plate, el admin ingestó un gol de River, y `GET /api/fans/me/notifications` (la misma llamada que hace `/alerts`) devolvió la alerta con el mensaje legible generado por `alert-dispatcher-service`.
 
-- [ ] **T-65 · Panel de administrador** — `frontend-app/` · depende de: T-63, T-21, T-31 · carril C
+- [x] **T-65 · Panel de administrador** — `frontend-app/` · depende de: T-63, T-21, T-31 · carril C · [plan](plan_65_panel_admin.md)
   - **Qué:** pantalla de admin con el formulario para simular la carga de un evento deportivo y enlaces/estado de monitoreo.
   - **Por qué:** es el rol Administrador de la resolución y la forma de disparar la demo en vivo durante el coloquio.
   - **Afecta:** `frontend-app/` (páginas de admin).
   - **Requisitos:**
-    - [ ] Solo accesible con rol admin.
-    - [ ] Formulario de simulación de evento que llama al endpoint de ingesta.
-    - [ ] Estado del despachador y enlaces a Eureka, Kafka UI y Grafana.
-  - **Terminada cuando:** el admin dispara un evento desde la UI y el fan suscripto ve la alerta en su centro de alertas.
+    - [x] Solo accesible con rol admin (`RequireAuth adminOnly`, reusa T-61/T-63).
+    - [x] Formulario de simulación de evento que llama al endpoint de ingesta.
+    - [x] Estado del despachador y enlaces a Eureka, Kafka UI y Grafana.
+  - **Terminada cuando:** el admin dispara un evento desde la UI y el fan suscripto ve la alerta en su centro de alertas. ✅ Verificado el 2026-09-30, mismo flujo que T-64: se reprodujeron las llamadas exactas de `/admin` (`GET /api/matches` para poblar el selector, `POST /api/matches/{id}/events` para ingestar, `GET /api/alerts/status` para el estado) y el evento llegó como alerta real al fan suscripto.
+
+- [ ] **T-66 · Panel Principal (muro de partidos en vivo)** — `frontend-app/` · depende de: T-63, T-22 · carril C · **propuesta, no asignada**
+  - **Qué:** la pantalla de `docs/assets/mockup_panel_principal.png` — un muro con los partidos (`GET /api/matches`) y sus eventos recientes (`GET /api/matches/{id}/events`), cruzando `homeTeamId`/`awayTeamId` contra el catálogo para mostrar nombres.
+  - **Por qué:** hay un mockup para esta pantalla y el backend que la alimentaría (T-22) ya existe, pero **ninguna tarea del plan original la cubre**. Se detectó al implementar T-63 (2026-09-30): el home autenticado (`/`) hoy es un resumen simple (cantidad de suscripciones/alertas + accesos directos), no el muro de partidos del mockup, siguiendo la regla de `CLAUDE.md` de no construir algo que no esté en una tarea.
+  - **Afecta:** `frontend-app/` (`pages/index.js`).
+  - **Requisitos:** (a definir si se toma la tarea)
+    - [ ] Listado de partidos con estado (`SCHEDULED`/`LIVE`/`FINISHED`) y marcador, nombres de equipo resueltos contra el catálogo.
+    - [ ] Eventos recientes por partido (opcional, según cuánto se quiera parecer al mockup).
+  - **Terminada cuando:** — (sin definir hasta que se decida tomarla).
 
 ### Fase 5 — Cierre y entrega
 
@@ -499,8 +509,10 @@ La Fase 0 y la Fase 2 se hacen **juntos**: definen contratos y tocan puntos de i
 | 1 — Núcleo de dominio | 12 | 12 |
 | 2 — Integración y seguridad | 3 | 3 |
 | 3 — Requisitos transversales | 2 | 2 |
-| 4 — Frontend | 6 | 0 |
+| 4 — Frontend | 6 | 6 |
 | 5 — Cierre y entrega | 4 | 0 |
-| **Total** | **30** | **20** |
+| **Total** | **30** | **26** |
+
+> T-66 (Panel Principal) es una tarea **propuesta**, no forma parte del recuento de 30: se agrega a la tabla si el grupo decide tomarla.
 
 Actualizar esta tabla al cerrar cada tarea.

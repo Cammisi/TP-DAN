@@ -1,0 +1,98 @@
+.section {
+  margin-bottom: 2.5rem;
+}
+
+.sectionTitle {
+  margin: 0 0 0.75rem;
+  font-size: 1.1rem;
+}
+
+.search {
+  width: 100%;
+  max-width: 320px;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  font-size: 0.95rem;
+  margin-bottom: 1rem;
+}
+
+.teamList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.teamRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  padding: 0.75rem 1rem;
+}
+
+.teamName {
+  font-weight: 600;
+}
+
+.leagueName {
+  font-size: 0.8rem;
+  color: var(--color-muted);
+}
+
+.toggleOn,
+.toggleOff {
+  padding: 0.4rem 0.9rem;
+  border-radius: 999px;
+  border: 1px solid var(--color-primary);
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.toggleOn {
+  background: var(--color-primary);
+  color: #fff;
+}
+
+.toggleOff {
+  background: transparent;
+  color: var(--color-primary);
+}
+
+.toggleOn:disabled,
+.toggleOff:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.leagueGroup {
+  margin-bottom: 1.25rem;
+}
+
+.leagueHeading {
+  margin: 0 0 0.5rem;
+  font-size: 0.9rem;
+  color: var(--color-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.muted {
+  color: var(--color-muted);
+  font-size: 0.9rem;
+}
+
+.error {
+  background: #fbeceb;
+  color: var(--color-danger);
+  border-radius: 8px;
+  padding: 0.6rem 0.75rem;
+  font-size: 0.85rem;
+  margin-bottom: 1.25rem;
+}

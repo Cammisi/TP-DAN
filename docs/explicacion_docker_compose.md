@@ -226,6 +226,27 @@ build:
 
 ---
 
+### 🖥️ Grupo 4: Frontend
+
+#### `frontend-app` — Cliente web (T-60)
+
+```yaml
+build:
+  context: ./frontend-app
+  args:
+    NEXT_PUBLIC_GATEWAY_URL: http://localhost:8080
+```
+
+- **¿Qué hace?** Sirve la aplicación Next.js (Pages Router) que consume exclusivamente `cloud-gateway`. Ningún otro contenedor le habla a este directamente.
+- **`args` en vez de `environment`**: `NEXT_PUBLIC_GATEWAY_URL` es una variable que Next.js **inlinea en el bundle del browser durante el build**, no algo que lea en runtime. Por eso va como build arg (`docker compose build` la necesita) y no como `environment:` del contenedor — ponerla ahí no tendría efecto, porque el bundle ya está compilado cuando el contenedor arranca. Y apunta a `localhost:8080`, no a `http://cloud-gateway:8080`, porque quien hace las requests es el **navegador del usuario**, que no forma parte de la red Docker.
+- **`depends_on: cloud-gateway` (`service_healthy`)**: no es estrictamente necesario para que Next.js arranque (no le pega al gateway en el build), pero evita que la demo muestre una pantalla de login contra un gateway que todavía no está listo.
+- **Puerto**: `3000:3000`, el único del frontend expuesto al host.
+
+> [!WARNING]
+> El `Dockerfile` fija `ENV HOSTNAME=0.0.0.0` en la etapa de runtime. El servidor standalone que genera `next build` (`output: "standalone"`) usa la variable de entorno `HOSTNAME` para decidir en qué interfaz escuchar, y Docker **siempre** setea `HOSTNAME` al id del contenedor. Sin este override, el server queda escuchando solo en la IP interna de la red Docker del contenedor y ni el healthcheck (`curl a localhost`) ni el puerto publicado al host pueden alcanzarlo — el contenedor arranca pero nunca pasa a `healthy`. Detectado en T-60.
+
+---
+
 ## 🔐 Secretos: el archivo `.env`
 
 Los dos secretos del proyecto **no están escritos en el `docker-compose.yml`**: el compose los lee de un archivo `.env` en la raíz del repo, que git ignora. Así cada integrante tiene sus propios valores y ningún secreto queda commiteado.
@@ -400,6 +421,7 @@ Una vez que todo esté corriendo, podés acceder a:
 
 | Servicio | URL |
 |---|---|
+| Frontend (la app) | [http://localhost:3000](http://localhost:3000) |
 | API Gateway (punto de entrada) | [http://localhost:8080](http://localhost:8080) |
 | Eureka (panel de servicios) | [http://localhost:8761](http://localhost:8761) |
 | Kafka UI (monitor de mensajes) | [http://localhost:8090](http://localhost:8090) |

@@ -54,7 +54,7 @@ El catálogo de ligas y equipos vive en `fan-identity-service` y no en `match-in
 
 ## Estado del proyecto
 
-La infraestructura (Eureka, gateway, Docker Compose con Postgres, MongoDB y Kafka) está armada y verificada en ejecución. `fan-identity-service` está completo (auth, catálogo, suscripciones, historial de notificaciones). `match-ingestion-service` y `alert-dispatcher-service` también están completos y verificados en ejecución (modelo de datos, ingesta y consulta de eventos, mensajería Kafka, fan-out de alertas y Circuit Breaker). La seguridad del gateway (validación del JWT, rol admin, CORS) y la protección de los endpoints internos entre servicios están implementadas, pendientes de verificar ejecutando el stack. El frontend todavía no fue creado.
+El backend está completo y verificado en ejecución: infraestructura (Eureka, gateway, Docker Compose con Postgres, MongoDB y Kafka), `fan-identity-service` (auth, catálogo, suscripciones, historial de notificaciones), `match-ingestion-service` y `alert-dispatcher-service` (modelo de datos, ingesta y consulta de eventos, mensajería Kafka, fan-out de alertas y Circuit Breaker), seguridad del gateway (JWT, rol admin, CORS) y endpoints internos protegidos. El frontend (Next.js) también está completo: login/registro, catálogo y suscripciones, centro de alertas y panel de administrador. Falta el cierre de la Fase 5: tests automatizados, colección de requests reproducible, documentación final y el ensayo del coloquio.
 
 El detalle del avance, las tareas pendientes y el orden en que hay que abordarlas están en **[docs/planificacion_global.md](docs/planificacion_global.md)**.
 
@@ -70,7 +70,7 @@ TP-DAN/
 │       ├── fan-identity-service/       # puerto 8081 — PostgreSQL
 │       ├── match-ingestion-service/    # puerto 8082 — MongoDB + Kafka
 │       └── alert-dispatcher-service/   # puerto 8083 — Kafka
-├── frontend-app/                       # (pendiente) Cliente web, consume únicamente el gateway
+├── frontend-app/                       # puerto 3000 — Next.js, consume únicamente el gateway
 ├── docs/                               # Planificación y documentación del TP
 ├── docker-compose.yml
 ├── README.md
@@ -112,6 +112,7 @@ El orden de arranque está gobernado por `depends_on` con `condition: service_he
 
 | Servicio | Puerto | Expuesto al host | Descripción |
 |---|:---:|:---:|---|
+| frontend-app | 3000 | Sí | La aplicación web |
 | cloud-gateway | 8080 | Sí | Único puerto que debe consumir el frontend |
 | eureka-server | 8761 | Sí | Dashboard de registro de servicios |
 | fan-identity-service | 8081 | No | Solo accesible dentro de la red Docker / vía gateway |
@@ -121,6 +122,9 @@ El orden de arranque está gobernado por `depends_on` con `condition: service_he
 | MongoDB | 27017 | Sí | Base de `match-ingestion-service` (DB: `match_ingestion_db`) |
 | Kafka | 9092 | Sí | Broker en modo KRaft. Listener interno para contenedores: `kafka:19092` |
 | Kafka UI | 8090 | Sí | Panel web de administración de tópicos y consumers |
+| Prometheus | 9090 | Sí | Métricas scrapeadas de los 5 servicios Spring (T-50) |
+| Grafana | 3001 | Sí | Dashboard de métricas y logs (usuario/clave por defecto: `admin`/`admin`) |
+| Loki | 3100 | Sí | API de almacenamiento de logs (T-51), se consulta desde Grafana |
 
 Todos los servicios corren en la red Docker `tp-nube-network` y se resuelven entre sí por nombre de contenedor.
 
