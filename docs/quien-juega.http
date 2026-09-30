@@ -1,0 +1,146 @@
+### ¿Quién Juega? — Colección de requests reproducible (T-71)
+#
+# Reproduce el recorrido de T-42 (ver plan_42_flujo_punta_a_punta.md) de punta a
+# punta, siempre a través del gateway (nunca directo a un microservicio).
+#
+# Requiere la extensión "REST Client" de VS Code (humao.rest-client) — el
+# `@name` de cada request y `{{nombre.response.body.$.campo}}` son de esa
+# extensión; permite encadenar el token sin copiarlo a mano entre requests.
+#
+# Cómo correrla: stack recién levantado (`docker compose up -d --build`, los
+# 9 contenedores healthy) y de arriba a abajo, en orden — varios pasos dependen
+# de las variables que captura un paso anterior (@tokenFan, @tokenAdmin, @eventId).
+
+@gateway = http://localhost:8080
+@fanEmail = demo@quienjuega.com
+@fanPassword = demo1234
+
+### 1. Registro — 201 con id
+POST {{gateway}}/api/fans/auth/register
+Content-Type: application/json
+
+{
+  "email": "{{fanEmail}}",
+  "password": "{{fanPassword}}"
+}
+
+### 2. Login del fan — 200, role: "FAN"
+# @name loginFan
+POST {{gateway}}/api/fans/auth/login
+Content-Type: application/json
+
+{
+  "email": "{{fanEmail}}",
+  "password": "{{fanPassword}}"
+}
+
+@tokenFan = {{loginFan.response.body.$.token}}
+
+### 3. Buscar el equipo en el catálogo — 200, incluye "id":"team-colon"
+# La búsqueda no ignora tildes: "colon" (sin tilde) no matchea "Colón", por eso
+# acá se usa el prefijo sin la "ó" en vez del nombre completo (ver R-12 en
+# planificacion_global.md).
+GET {{gateway}}/api/catalog/teams?name=col
+Authorization: Bearer {{tokenFan}}
+
+### 4. Suscribirse a Colón — 201 con teamName y leagueName
+POST {{gateway}}/api/fans/subscriptions
+Authorization: Bearer {{tokenFan}}
+Content-Type: application/json
+
+{
+  "teamId": "team-colon"
+}
+
+### 5. Ver mis suscripciones — 200, aparece Colón
+GET {{gateway}}/api/fans/subscriptions
+Authorization: Bearer {{tokenFan}}
+
+### 6. Historial de alertas — 200, todavía vacío
+GET {{gateway}}/api/fans/me/notifications
+Authorization: Bearer {{tokenFan}}
+
+### 7. Login del admin — 200, role: "ADMIN"
+# @name loginAdmin
+POST {{gateway}}/api/fans/auth/login
+Content-Type: application/json
+
+{
+  "email": "admin@quienjuega.com",
+  "password": "admin123"
+}
+
+@tokenAdmin = {{loginAdmin.response.body.$.token}}
+
+### 8. El admin ingesta un gol de Colón en match-001 — 201 con eventId
+# @name ingestGoal
+POST {{gateway}}/api/matches/match-001/events
+Authorization: Bearer {{tokenAdmin}}
+Content-Type: application/json
+
+{
+  "matchId": "match-001",
+  "teamId": "team-colon",
+  "type": "GOAL",
+  "minute": 78,
+  "description": "Gol de Colón",
+  "playerName": "Facundo Farías",
+  "homeScore": 1,
+  "awayScore": 0,
+  "occurredAt": "2026-01-01T00:00:00Z"
+}
+
+@eventId = {{ingestGoal.response.body.$.eventId}}
+
+### 9. El fan ve la alerta (unos segundos después del paso 8) — 200, un item
+# con eventId == @eventId y message == "¡Gol! Facundo Farías (78') — marcador 1-0"
+GET {{gateway}}/api/fans/me/notifications
+Authorization: Bearer {{tokenFan}}
+
+### 10. Estado del despachador — circuitState: "CLOSED", el evento en lastProcessedEvents
+GET {{gateway}}/api/alerts/status
+Authorization: Bearer {{tokenAdmin}}
+
+### 11. El partido quedó actualizado — match-001 en LIVE, marcador 1-0
+GET {{gateway}}/api/matches?teamId=team-colon
+Authorization: Bearer {{tokenAdmin}}
+
+### --- Chequeos de seguridad (T-40/T-41) sobre el mismo stack ---
+
+### 12. Sin token — 401
+GET {{gateway}}/api/fans/subscriptions
+
+### 13. Token adulterado — 401
+GET {{gateway}}/api/fans/subscriptions
+Authorization: Bearer token-adulterado-a-mano
+
+### 14. Un fan (no admin) intentando ingestar un evento — 403 FORBIDDEN
+POST {{gateway}}/api/matches/match-001/events
+Authorization: Bearer {{tokenFan}}
+Content-Type: application/json
+
+{
+  "matchId": "match-001",
+  "teamId": "team-colon",
+  "type": "GOAL",
+  "minute": 10,
+  "playerName": "Nadie",
+  "homeScore": 2,
+  "awayScore": 0
+}
+
+### 15. Endpoint interno, inalcanzable desde el host — 401 (el gateway exige token) o 404 (ruta no declarada)
+GET {{gateway}}/internal/fans/subscribers/team-colon
+
+### 16. Registro con el mismo email — 409 EMAIL_ALREADY_EXISTS
+POST {{gateway}}/api/fans/auth/register
+Content-Type: application/json
+
+{
+  "email": "{{fanEmail}}",
+  "password": "{{fanPassword}}"
+}
+
+### --- Persistencia tras reiniciar ---
+# Correr `docker compose restart` y repetir los pasos 5 y 9 con los mismos
+# tokens: la suscripción y la notificación tienen que seguir ahí.

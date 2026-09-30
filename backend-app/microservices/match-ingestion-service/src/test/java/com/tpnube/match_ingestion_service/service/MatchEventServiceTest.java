@@ -1,0 +1,95 @@
+package com.tpnube.match_ingestion_service.service;
+
+import com.tpnube.match_ingestion_service.domain.Match;
+import com.tpnube.match_ingestion_service.domain.MatchStatus;
+import com.tpnube.match_ingestion_service.dto.MatchEventDTO;
+import com.tpnube.match_ingestion_service.kafka.MatchEventPublisher;
+import com.tpnube.match_ingestion_service.repository.MatchEventRepository;
+import com.tpnube.match_ingestion_service.repository.MatchRepository;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+
+import java.time.Instant;
+import java.util.Optional;
+
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+@ExtendWith(MockitoExtension.class)
+class MatchEventServiceTest {
+
+    @Mock
+    private MatchRepository matchRepository;
+
+    @Mock
+    private MatchEventRepository matchEventRepository;
+
+    @Mock
+    private MatchEventPublisher matchEventPublisher;
+
+    private MatchEventService matchEventService;
+
+    @BeforeEach
+    void setUp() {
+        matchEventService = new MatchEventService(matchRepository, matchEventRepository, matchEventPublisher);
+    }
+
+    @Test
+    void rechazaUnEventoSinType() {
+        MatchEventDTO request = new MatchEventDTO(
+                null, "match-001", "team-colon", null, 10, "desc", "Jugador", null, 1, 0, Instant.now());
+
+        assertThatThrownBy(() -> matchEventService.ingestEvent("match-001", request))
+                .isInstanceOf(MatchEventService.InvalidEventException.class);
+        verify(matchEventRepository, never()).save(any());
+    }
+
+    @Test
+    void rechazaUnEventoSinMinute() {
+        MatchEventDTO request = new MatchEventDTO(
+                null, "match-001", "team-colon", "GOAL", null, "desc", "Jugador", null, 1, 0, Instant.now());
+
+        assertThatThrownBy(() -> matchEventService.ingestEvent("match-001", request))
+                .isInstanceOf(MatchEventService.InvalidEventException.class);
+        verify(matchEventRepository, never()).save(any());
+    }
+
+    @Test
+    void rechazaUnTypeNoSoportado() {
+        MatchEventDTO request = new MatchEventDTO(
+                null, "match-001", "team-colon", "PENALTY", 10, "desc", "Jugador", null, 1, 0, Instant.now());
+
+        assertThatThrownBy(() -> matchEventService.ingestEvent("match-001", request))
+                .isInstanceOf(MatchEventService.InvalidEventException.class);
+        verify(matchEventRepository, never()).save(any());
+    }
+
+    @Test
+    void rechazaUnEventoDeUnPartidoInexistente() {
+        when(matchRepository.findById("match-999")).thenReturn(Optional.empty());
+        MatchEventDTO request = new MatchEventDTO(
+                null, "match-999", "team-colon", "GOAL", 10, "desc", "Jugador", null, 1, 0, Instant.now());
+
+        assertThatThrownBy(() -> matchEventService.ingestEvent("match-999", request))
+                .isInstanceOf(MatchEventService.MatchNotFoundException.class);
+        verify(matchEventRepository, never()).save(any());
+    }
+
+    @Test
+    void rechazaUnGolSinJugador() {
+        Match match = new Match("match-001", "team-colon", "team-union", MatchStatus.LIVE, Instant.now(), 0, 0);
+        when(matchRepository.findById("match-001")).thenReturn(Optional.of(match));
+        MatchEventDTO request = new MatchEventDTO(
+                null, "match-001", "team-colon", "GOAL", 10, "desc", null, null, 1, 0, Instant.now());
+
+        assertThatThrownBy(() -> matchEventService.ingestEvent("match-001", request))
+                .isInstanceOf(MatchEventService.InvalidEventException.class);
+        verify(matchEventRepository, never()).save(any());
+    }
+}

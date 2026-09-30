@@ -99,6 +99,7 @@ Huecos que ni el enunciado ni la resolución propuesta resolvían. **Las seis es
 - [ ] **R-9 · `docker compose up` (sin `--build`) reusa imágenes viejas en silencio.** Detectado el 2026-09-26 al verificar el carril B: tras `git pull` con el commit de T-20 a T-31, `docker compose up -d` levantó los contenedores con las imágenes cacheadas de días antes (ninguna incluía ni el código nuevo de `match-ingestion-service`/`alert-dispatcher-service` ni los fixes de la revisión de `fan-identity-service`). Como el healthcheck es solo TCP (R-6), los contenedores igual quedaban `healthy` corriendo código viejo: `GET /api/matches` daba `404` porque el `MatchController` de esa imagen no existía todavía. Se resolvió con `docker compose up -d --build`. **No hay tarea que lo corrija de raíz** (depende de acordarse de pasar `--build` después de cada `pull`); queda como algo a tener presente en el coloquio y candidato a mencionar en `docs/explicacion_docker_compose.md`.
 - [ ] **R-10 · El timeout de Feign de T-31 se ignora en silencio.** `alert-dispatcher-service/application.yaml` lo configura bajo `feign.client.config.fan-identity-service`, pero en Spring Cloud OpenFeign 4+ el prefijo es `spring.cloud.openfeign.client` (verificado en `FeignClientProperties` de `spring-cloud-openfeign-core-5.0.2.jar`). Una property mal escrita no da error: el callback de notificación usa el default de Feign (60 s de lectura) en vez de 3 s. La verificación de T-31 sigue siendo válida (no ejercitaba ese caso), pero la mitigación documentada en `explicacion_circuit_breaker.md` no está activa. Se corrige en T-41 (ver [plan](plan_41_blindar_endpoints_internos.md)), que toca la misma configuración. **Corregido en el código de T-41**: el bloque pasó a `spring.cloud.openfeign.client.config`, y `AlertDispatcherServiceApplicationTests` verifica que el timeout se aplique (en verde; con un override a otro valor falla, así que el test no es vacío).
 - [ ] **R-11 · Justo después de un `docker compose up` en frío, el primer evento puede fallar transitoriamente.** Detectado el 2026-09-30 al reverificar Fase 2/3 con Docker Desktop recién arrancado: con los 13 contenedores iniciando a la vez, el consumer de Kafka de `alert-dispatcher-service` perdió el heartbeat con el broker (`session timed out without receiving a heartbeat response`) y, al reconectar, la caché del load balancer hacia `fan-identity-service` todavía no tenía la instancia — el evento quedó en `undispatchedEvents` con el circuito pasando brevemente a medir fallos. No es un bug de T-30/T-31: el fallback se comportó exactamente como está diseñado (registró el evento, no lo perdió) y el sistema se auto-recuperó solo; un segundo evento, ~1 minuto después, se despachó sin problema. **Para el coloquio:** esperar 1-2 minutos después de `docker compose up` antes de disparar la demo del flujo de eventos, o tenerlo presente como ejemplo en vivo de para qué sirve el Circuit Breaker.
+- [ ] **R-12 · La búsqueda del catálogo (`GET /api/catalog/teams?name=`) no ignora tildes.** Detectado el 2026-09-30 armando la colección de T-71: `?name=colon` no encuentra a "Colón" porque la comparación es `LIKE` case-insensitive pero no accent-insensitive — "colon" y "Colón" difieren en la o/ó y no hay substring en común desde ahí. Ningún requisito de T-15/T-63 pide ignorar tildes explícitamente, así que no se lo corrige de oficio (regla de `CLAUDE.md` de no inventar alcance); queda anotado para que el buscador del frontend no sorprenda en la demo: buscar por el prefijo sin la tilde ("col", "uni") sí funciona. Si se quiere corregir de verdad, la opción más simple es la extensión `unaccent` de Postgres en la query de `TeamRepository.search`.
 
 ---
 
@@ -457,46 +458,47 @@ La Fase 0 y la Fase 2 se hacen **juntos**: definen contratos y tocan puntos de i
 
 ### Fase 5 — Cierre y entrega
 
-- [ ] **T-70 · Pruebas automatizadas mínimas** — transversal · depende de: T-42 · todos
+- [x] **T-70 · Pruebas automatizadas mínimas** — transversal · depende de: T-42 · todos · [plan](plan_70_tests_automatizados.md)
   - **Qué:** tests de las reglas de negocio que más duelen si se rompen, más un test de contexto por servicio.
   - **Por qué:** el enunciado no exige tests, así que el objetivo es cubrir lo crítico sin invertir tiempo desproporcionado.
   - **Afecta:** `src/test/java` de los microservicios.
   - **Requisitos:**
-    - [ ] Cada servicio levanta su contexto en un test (detecta configuración rota).
-    - [ ] fan-identity: tests de registro/login y de no duplicar suscripciones.
-    - [ ] match-ingestion: test de rechazo de evento inválido.
-    - [ ] alert-dispatcher: test del fallback del Circuit Breaker.
-    - [ ] `mvn test` pasa en los 5 servicios.
-  - **Terminada cuando:** `mvn test` está en verde en todo el backend.
+    - [x] Cada servicio levanta su contexto en un test (detecta configuración rota).
+    - [x] fan-identity: tests de registro/login y de no duplicar suscripciones.
+    - [x] match-ingestion: test de rechazo de evento inválido.
+    - [x] alert-dispatcher: test del fallback del Circuit Breaker (ya existía desde T-31: `AlertDispatchServiceTest`).
+    - [x] `mvn test` pasa en los 5 servicios.
+  - **Terminada cuando:** `mvn test` está en verde en todo el backend. ✅ Verificado el 2026-09-30: sin Maven/JDK local (ver gotcha de `CLAUDE.md`), se corrió `mvn test` para cada servicio vía `docker run` con el contenedor `maven:3.9-eclipse-temurin-25`, conectado a la infraestructura real ya levantada (`postgres`/`mongo`/`kafka`/`eureka-server`). `BUILD SUCCESS` en los 5: fan-identity-service (9 tests), match-ingestion-service (6), alert-dispatcher-service (8), eureka-server (1), cloud-gateway (1) — 25 en total, 0 fallos.
 
-- [ ] **T-71 · Colección de requests reproducible** — `docs/` · depende de: T-42 · todos
+- [x] **T-71 · Colección de requests reproducible** — `docs/` · depende de: T-42 · todos
   - **Qué:** archivo `.http` (o colección equivalente) con todo el flujo en orden, ejecutable desde el editor.
   - **Por qué:** sirve para probar sin frontend y es el plan B si algo falla en la demo del coloquio.
   - **Afecta:** `docs/`.
   - **Requisitos:**
-    - [ ] Cubre el recorrido completo de T-42 en orden.
-    - [ ] El token se reutiliza entre requests sin copiar y pegar a mano.
-  - **Terminada cuando:** ejecutando la colección de arriba a abajo sobre un stack recién levantado, todas las respuestas son las esperadas.
+    - [x] Cubre el recorrido completo de T-42 en orden.
+    - [x] El token se reutiliza entre requests sin copiar y pegar a mano (sintaxis de la extensión **REST Client** de VS Code: `# @name` + `{{nombre.response.body.$.campo}}`).
+  - **Terminada cuando:** ejecutando la colección de arriba a abajo sobre un stack recién levantado, todas las respuestas son las esperadas. ✅ `docs/quien-juega.http`, verificado el 2026-09-30 reproduciendo los 16 pasos con `curl` (no hay extensión REST Client en este entorno para correr el `.http` directamente, así que se ejercitaron los mismos requests uno por uno, en el mismo orden). Los 16 dieron el resultado esperado. De paso salió **R-12** (búsqueda del catálogo sin tildes) y se confirmó que el manejo de UTF-8/tildes del backend es correcto — los `400`/`INVALID_EVENT` que aparecieron al principio eran de mi propio `curl` tipeado en Git Bash en Windows (codifica tildes como Latin-1, no UTF-8), no del código: con el mismo payload mandado desde un archivo UTF-8 real, igual que hace el `.http`, funciona perfecto.
 
-- [ ] **T-72 · Documentación final** — `docs/`, `README.md` · depende de: T-50, T-51, T-65 · todos
+- [x] **T-72 · Documentación final** — `docs/`, `README.md` · depende de: T-50, T-51, T-65 · todos
   - **Qué:** actualizar README y escribir las `explicacion_*` que falten (arquitectura, seguridad, mensajería, observabilidad).
   - **Por qué:** la entrega incluye el repositorio, y las explicaciones son el material de estudio del grupo para el coloquio.
   - **Afecta:** `README.md`, `docs/`.
   - **Requisitos:**
-    - [ ] README refleja el estado final: servicios, puertos (incluidos Grafana/Prometheus), cómo levantar y cómo probar.
-    - [ ] Una `explicacion_*` por cada tema que se vaya a defender en el coloquio.
-    - [ ] Esta planificación queda con todas las tareas marcadas.
-  - **Terminada cuando:** alguien ajeno al grupo levanta y entiende el proyecto leyendo solo el README y `/docs`.
+    - [x] README refleja el estado final: servicios, puertos (incluidos Grafana/Prometheus), cómo levantar y **cómo probar** (sección nueva: credenciales semilla + `docs/quien-juega.http`).
+    - [x] Una `explicacion_*` por cada tema que se vaya a defender en el coloquio: se agregaron `explicacion_observabilidad.md` (T-50/T-51, no existía) y `explicacion_frontend.md` (T-60 a T-65, no existía).
+    - [ ] Esta planificación queda con todas las tareas marcadas — falta T-73 (depende de esta misma tarea, no puede cerrarse antes).
+  - **Terminada cuando:** alguien ajeno al grupo levanta y entiende el proyecto leyendo solo el README y `/docs`. ✅ Verificado el 2026-09-30: de paso se corrigieron partes del README que habían quedado desactualizadas por tareas anteriores (nombre de carpeta del árbol, conteo de contenedores, referencia a T-42 "todavía no" pese a estar hecha hace rato, tabla de puertos sin Prometheus/Grafana/Loki/frontend).
 
-- [ ] **T-73 · Ensayo del coloquio** — transversal · depende de: T-71, T-72 · todos
+- [ ] **T-73 · Ensayo del coloquio** — transversal · depende de: T-71, T-72 · todos · [plan](plan_73_ensayo_coloquio.md)
   - **Qué:** guion de la demo, reparto de quién explica qué, y ensayo completo sobre un stack levantado de cero.
   - **Por qué:** la nota depende del coloquio, y hay partes (apertura del circuito, correlación de logs) que hay que saber mostrar en vivo.
   - **Afecta:** `docs/`.
   - **Requisitos:**
-    - [ ] Guion con el orden de la demo y qué muestra cada integrante.
-    - [ ] Cada requisito obligatorio del enunciado tiene un momento donde se muestra funcionando.
-    - [ ] La demostración del Circuit Breaker está ensayada.
-    - [ ] Ensayo completo hecho al menos una vez de punta a punta.
+    - [x] Guion con el orden de la demo y qué muestra cada integrante — [docs/guion_coloquio.md](guion_coloquio.md), con reparto propuesto por carril (A/B/C), ajustable.
+    - [x] Cada requisito obligatorio del enunciado tiene un momento donde se muestra funcionando — los 8 del enunciado + Resilience4J, mapeados 1 a 1 en el guion.
+    - [x] La demostración del Circuit Breaker está ensayada — son los mismos pasos verificados en Docker para T-31 y R-11, ya reproducidos más de una vez en esta sesión.
+    - [ ] Ensayo completo hecho al menos una vez de punta a punta — **pendiente, no lo puedo hacer yo**: "el grupo corre la demo" son los tres integrantes practicando juntos, repartiéndose el guion propuesto (o el que decidan) y cronometrándose. El guion tiene una tabla al final para anotar la fecha y el tiempo real una vez lo hagan.
+  - **Terminada cuando:** el grupo corre la demo entera sin improvisar y dentro del tiempo previsto. **No cerrada todavía** — queda el ensayo real de los tres, ver el requisito de arriba.
   - **Terminada cuando:** el grupo corre la demo entera sin improvisar y dentro del tiempo previsto.
 
 ---
@@ -510,8 +512,8 @@ La Fase 0 y la Fase 2 se hacen **juntos**: definen contratos y tocan puntos de i
 | 2 — Integración y seguridad | 3 | 3 |
 | 3 — Requisitos transversales | 2 | 2 |
 | 4 — Frontend | 6 | 6 |
-| 5 — Cierre y entrega | 4 | 0 |
-| **Total** | **30** | **26** |
+| 5 — Cierre y entrega | 4 | 3 |
+| **Total** | **30** | **29** |
 
 > T-66 (Panel Principal) es una tarea **propuesta**, no forma parte del recuento de 30: se agrega a la tabla si el grupo decide tomarla.
 

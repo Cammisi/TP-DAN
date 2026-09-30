@@ -54,14 +54,14 @@ El catálogo de ligas y equipos vive en `fan-identity-service` y no en `match-in
 
 ## Estado del proyecto
 
-El backend está completo y verificado en ejecución: infraestructura (Eureka, gateway, Docker Compose con Postgres, MongoDB y Kafka), `fan-identity-service` (auth, catálogo, suscripciones, historial de notificaciones), `match-ingestion-service` y `alert-dispatcher-service` (modelo de datos, ingesta y consulta de eventos, mensajería Kafka, fan-out de alertas y Circuit Breaker), seguridad del gateway (JWT, rol admin, CORS) y endpoints internos protegidos. El frontend (Next.js) también está completo: login/registro, catálogo y suscripciones, centro de alertas y panel de administrador. Falta el cierre de la Fase 5: tests automatizados, colección de requests reproducible, documentación final y el ensayo del coloquio.
+Backend y frontend están completos y verificados en ejecución: infraestructura (Eureka, gateway, Docker Compose con Postgres, MongoDB, Kafka y el stack de observabilidad), los tres microservicios de negocio, seguridad de punta a punta (JWT, rol admin, CORS, endpoints internos protegidos), métricas y logs centralizados, y el frontend en Next.js (login/registro, catálogo y suscripciones, centro de alertas, panel de administrador). Tests automatizados y la colección de requests reproducible también están hechos. Falta el ensayo final del coloquio (T-73).
 
 El detalle del avance, las tareas pendientes y el orden en que hay que abordarlas están en **[docs/planificacion_global.md](docs/planificacion_global.md)**.
 
 ## Estructura del repositorio
 
 ```
-TP-DAN/
+tp-deportes-nube/
 ├── backend-app/
 │   ├── infrastructure/
 │   │   ├── eureka-server/              # Service Discovery — puerto 8761
@@ -71,8 +71,11 @@ TP-DAN/
 │       ├── match-ingestion-service/    # puerto 8082 — MongoDB + Kafka
 │       └── alert-dispatcher-service/   # puerto 8083 — Kafka
 ├── frontend-app/                       # puerto 3000 — Next.js, consume únicamente el gateway
+├── infrastructure/                     # Config de Prometheus, Grafana, Loki y Promtail (T-50/T-51)
 ├── docs/                               # Planificación y documentación del TP
+│   └── quien-juega.http                # Colección de requests reproducible (T-71)
 ├── docker-compose.yml
+├── .env.example                        # Plantilla de secretos — copiar a .env antes de levantar
 ├── README.md
 └── CLAUDE.md                           # Instrucciones para la IA que trabaja sobre el proyecto
 ```
@@ -106,7 +109,22 @@ docker compose down -v
 
 El orden de arranque está gobernado por `depends_on` con `condition: service_healthy`: las bases de datos y Kafka deben pasar su healthcheck antes de que arranquen los microservicios correspondientes, y `eureka-server` debe estar saludable antes que cualquier cliente Eureka.
 
-> El levantamiento de los 9 contenedores está verificado (T-02). El recorrido funcional de punta a punta (registro → login → suscripción → evento → alerta) todavía no: es la tarea T-42 de la planificación global.
+> El levantamiento de los 13 contenedores y el recorrido funcional de punta a punta (registro → login → catálogo → suscripción → evento → alerta, con la seguridad de T-40/T-41 activa) están verificados de punta a punta — ver **Cómo probar** abajo.
+
+## Cómo probar
+
+Sin escribir código, dos formas:
+
+1. **Desde el navegador**, en `http://localhost:3000` (ver **Puertos y paneles**). Usuarios semilla (`fan-identity-service` los crea al arrancar, siempre los mismos):
+
+   | Rol | Email | Contraseña |
+   |---|---|---|
+   | Fan | `fan1@quienjuega.com` | `fan123` |
+   | Admin | `admin@quienjuega.com` | `admin123` |
+
+   O registrar una cuenta nueva desde `/register` (queda con rol `FAN`).
+
+2. **Sin frontend**, con la colección reproducible: [docs/quien-juega.http](docs/quien-juega.http) — requiere la extensión **REST Client** de VS Code. Cubre el recorrido completo (registro, login, catálogo, suscripción, ingesta de un evento por el admin, la alerta llegándole al fan) más los chequeos de seguridad de T-40/T-41, de arriba a abajo sobre un stack recién levantado.
 
 ## Puertos y paneles
 
@@ -145,6 +163,9 @@ Toda la documentación vive en [docs/](docs/):
 | [explicacion_mensajeria_kafka.md](docs/explicacion_mensajeria_kafka.md) | Productor y consumer de Kafka, esquema del evento, cómo demostrarlo |
 | [explicacion_circuit_breaker.md](docs/explicacion_circuit_breaker.md) | Circuit Breaker (Resilience4J), cómo demostrar la apertura |
 | [explicacion_seguridad.md](docs/explicacion_seguridad.md) | JWT, validación en el gateway, roles, endpoints internos, CORS y secretos |
+| [explicacion_observabilidad.md](docs/explicacion_observabilidad.md) | Métricas (Prometheus/Grafana) y logs centralizados (Loki/Promtail), cómo demostrarlo |
+| [explicacion_frontend.md](docs/explicacion_frontend.md) | Arquitectura de `frontend-app`, capa de API/sesión, qué mockup quedó fuera de alcance |
+| [quien-juega.http](docs/quien-juega.http) | Colección de requests reproducible del flujo completo (ver **Cómo probar**) |
 
 Convención de nombres dentro de `docs/`:
 

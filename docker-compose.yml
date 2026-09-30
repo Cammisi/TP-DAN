@@ -41,9 +41,12 @@ services:
     volumes:
       - mongo-data:/data/db
     healthcheck:
+      # timeout en 10s, no 5s: mongosh levanta su propio proceso Node.js en cada
+      # chequeo (no es la query lo lento), y eso solo puede tardar 2-4s largos
+      # con la máquina cargada — mismo problema que tuvo el healthcheck de kafka.
       test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping')"]
       interval: 10s
-      timeout: 5s
+      timeout: 10s
       retries: 5
       start_period: 10s
     networks:
