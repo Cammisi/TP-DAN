@@ -264,7 +264,7 @@ En el archivo conviven **dos formas** de obtener la imagen de un contenedor:
 
 | Forma | Servicios | ¿De dónde sale la imagen? |
 |---|---|---|
-| `image: nombre:version` | `postgres`, `mongo`, `kafka`, `kafka-ui` | Se **descarga ya armada** desde Docker Hub (un repositorio público de imágenes) |
+| `image: nombre:version` | `postgres`, `mongo`, `kafka`, `kafka-ui`, `prometheus`, `grafana`, `loki`, `promtail` | Se **descarga ya armada** desde Docker Hub (un repositorio público de imágenes) |
 | `build: { context: ./ruta }` | `eureka-server`, `cloud-gateway`, `fan-identity-service`, `match-ingestion-service`, `alert-dispatcher-service` | Se **construye en tu máquina** a partir del código fuente, siguiendo las instrucciones de un archivo `Dockerfile` |
 
 Los servicios de infraestructura (bases de datos, Kafka) son software estándar que nadie modifica, así que se usa la imagen oficial tal cual. En cambio, los 5 servicios de Java **son código nuestro**: no existe una imagen publicada con ellos, hay que compilarlos y empaquetarlos.
@@ -404,4 +404,5 @@ Una vez que todo esté corriendo, podés acceder a:
 | Eureka (panel de servicios) | [http://localhost:8761](http://localhost:8761) |
 | Kafka UI (monitor de mensajes) | [http://localhost:8090](http://localhost:8090) |
 | Prometheus (métricas scrapeadas) | [http://localhost:9090](http://localhost:9090) |
-| Grafana (dashboard de telemetría) | [http://localhost:3001](http://localhost:3001) |
+| Grafana (dashboard de telemetría y logs) | [http://localhost:3001](http://localhost:3001) |
+| Loki (API de almacenamiento de logs) | [http://localhost:3100](http://localhost:3100) |

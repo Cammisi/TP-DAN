@@ -41,7 +41,7 @@ Estado del código backend, actualizado a medida que se implementan tareas.
 | Spring Cloud Gateway + Eureka | ✅ | T-02 (verificado) |
 | Ejecución en contenedores Docker | ✅ | T-02 (verificado) |
 | Seguridad | ✅ | T-11, T-40, T-41, T-42 (verificados) |
-| Almacén centralizado de logs | 🔴 | T-51 |
+| Almacén centralizado de logs | ✅ | T-51 (verificado) |
 | Telemetría de métricas de rendimiento | ✅ | T-50 (verificado) |
 | 1 característica extra (Resilience4J) | ✅ | T-31 (verificado) |
 
@@ -370,16 +370,16 @@ La Fase 0 y la Fase 2 se hacen **juntos**: definen contratos y tocan puntos de i
   - **Ojo (desde T-40):** el gateway pide JWT para todo lo que no sea `/api/fans/auth/**`, incluido su propio `/actuator/**`. Se resolvió moviendo Actuator a `management.server.port: 8084` interno y no publicándolo al host. Las peticiones a `localhost:8080/actuator/**` reciben 401.
   - **Terminada cuando:** generando tráfico con el flujo de T-42, las métricas se mueven en el dashboard de Grafana. ✅ Verificado en Docker (2026-09-29): los 11 contenedores arrancaron saludables con healthchecks HTTP reales vía `curl`; Prometheus scrapea a los 5 targets en estado `UP`; Grafana arranca en `http://localhost:3001` con datasource y dashboard aprovisionados automáticamente; se generó tráfico y se verificaron en Prometheus y Grafana las series de requests HTTP por servicio, memoria JVM Heap y estado `CLOSED` de Resilience4J; Actuator queda blindado de accesos externos (401 en puerto 8080).
 
-- [ ] **T-51 · Almacén centralizado de logs** — transversal · depende de: T-50 · carril C
+- [x] **T-51 · Almacén centralizado de logs** — transversal · depende de: T-50 · carril C
   - **Qué:** Loki + Promtail en el compose, logs de los 5 servicios en formato consistente y un identificador de correlación que permita seguir un evento a través de los servicios.
   - **Por qué:** es el otro requisito obligatorio del enunciado que falta. Reutiliza el Grafana de T-50.
   - **Afecta:** `docker-compose.yml`, configuración de logging de los servicios.
   - **Requisitos:**
-    - [ ] Promtail recolecta los logs de todos los contenedores y los envía a Loki.
-    - [ ] Desde Grafana se pueden filtrar logs por servicio y por nivel.
-    - [ ] Un identificador de correlación viaja desde la ingesta hasta la notificación y aparece en los logs de los tres microservicios.
-    - [ ] Ninguna contraseña, token ni dato sensible aparece en los logs.
-  - **Terminada cuando:** disparando un evento se puede seguir su recorrido completo en Grafana filtrando por el identificador de correlación.
+    - [x] Promtail recolecta los logs de todos los contenedores y los envía a Loki.
+    - [x] Desde Grafana se pueden filtrar logs por servicio y por nivel.
+    - [x] Un identificador de correlación viaja desde la ingesta hasta la notificación y aparece en los logs de los tres microservicios.
+    - [x] Ninguna contraseña, token ni dato sensible aparece en los logs.
+  - **Terminada cuando:** disparando un evento se puede seguir su recorrido completo en Grafana filtrando por el identificador de correlación. ✅ Verificado en Docker (2026-09-29): Loki y Promtail recolectan logs de los 13 contenedores a través del socket de Docker; etiquetas `service` y `level` indexadas y filtrables; Grafana configurado con datasource Loki; se ingestó un evento deportivo y se verificó que el identificador de correlación (`eventId`) apareció en secuencia cronológica en `match-ingestion-service`, `alert-dispatcher-service` y `fan-identity-service`; 0 credenciales ni datos sensibles en logs.
 
 ### Fase 4 — Frontend
 
@@ -497,9 +497,9 @@ La Fase 0 y la Fase 2 se hacen **juntos**: definen contratos y tocan puntos de i
 | 0 — Cimientos | 3 | 3 |
 | 1 — Núcleo de dominio | 12 | 12 |
 | 2 — Integración y seguridad | 3 | 3 |
-| 3 — Requisitos transversales | 2 | 1 |
+| 3 — Requisitos transversales | 2 | 2 |
 | 4 — Frontend | 6 | 0 |
 | 5 — Cierre y entrega | 4 | 0 |
-| **Total** | **30** | **19** |
+| **Total** | **30** | **20** |
 
 Actualizar esta tabla al cerrar cada tarea.

@@ -9,6 +9,8 @@ import com.tpnube.match_ingestion_service.dto.MatchEventDTO;
 import com.tpnube.match_ingestion_service.kafka.MatchEventPublisher;
 import com.tpnube.match_ingestion_service.repository.MatchEventRepository;
 import com.tpnube.match_ingestion_service.repository.MatchRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
@@ -16,6 +18,8 @@ import java.util.List;
 
 @Service
 public class MatchEventService {
+
+    private static final Logger log = LoggerFactory.getLogger(MatchEventService.class);
 
     private final MatchRepository matchRepository;
     private final MatchEventRepository matchEventRepository;
@@ -55,6 +59,9 @@ public class MatchEventService {
         matchEventRepository.save(event);
         applyToMatch(match, type, event);
         publish(match, type, event);
+
+        log.info("Evento ingestade exitosamente: eventId={}, matchId={}, teamId={}, type={}",
+                event.getId(), match.getId(), event.getTeamId(), type);
 
         return event.getId();
     }

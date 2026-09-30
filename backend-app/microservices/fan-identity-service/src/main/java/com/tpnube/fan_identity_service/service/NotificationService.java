@@ -5,6 +5,8 @@ import com.tpnube.fan_identity_service.domain.Notification;
 import com.tpnube.fan_identity_service.dto.NotificationItemDTO;
 import com.tpnube.fan_identity_service.repository.FanRepository;
 import com.tpnube.fan_identity_service.repository.NotificationRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -13,6 +15,8 @@ import java.util.List;
 
 @Service
 public class NotificationService {
+
+    private static final Logger log = LoggerFactory.getLogger(NotificationService.class);
 
     private final NotificationRepository notificationRepository;
     private final FanRepository fanRepository;
@@ -60,6 +64,8 @@ public class NotificationService {
         // mostrarle al fan y la que espera el contrato en la respuesta del listado.
         Notification notification = new Notification(null, fan, message, matchId, teamId, eventId, occurredAt);
         notificationRepository.save(notification);
+        log.info("Notificación persistida: id={}, fanId={}, eventId={}, matchId={}",
+                notification.getId(), fanId, eventId, matchId);
         return notification.getId();
     }
 
