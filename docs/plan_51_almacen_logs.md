@@ -22,7 +22,7 @@ El enunciado exige un almacén centralizado de logs para auditar y monitorear la
 
 ### A. Microservicios (Logging con `eventId`)
 - **`match-ingestion-service` (`MatchEventService.java`)**:
-  - Agregar logger SLF4J y loguear: `log.info("Evento ingestade exitosamente: eventId={}, matchId={}, teamId={}, type={}", event.getId(), match.getId(), event.getTeamId(), type);`
+  - Agregar logger SLF4J y loguear: `log.info("Evento ingestado exitosamente: eventId={}, matchId={}, teamId={}, type={}", event.getId(), match.getId(), event.getTeamId(), type);`
 - **`fan-identity-service` (`NotificationService.java`)**:
   - Agregar logger SLF4J y loguear: `log.info("Notificación persistida: id={}, fanId={}, eventId={}, matchId={}", notification.getId(), fanId, eventId, matchId);`
 - **`alert-dispatcher-service` (`MatchEventListener.java` y `AlertDispatchService.java`)**:

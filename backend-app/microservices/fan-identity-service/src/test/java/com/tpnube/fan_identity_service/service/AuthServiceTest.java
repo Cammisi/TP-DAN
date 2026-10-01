@@ -10,6 +10,7 @@ import com.tpnube.fan_identity_service.repository.FanRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
@@ -19,6 +20,7 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -30,8 +32,7 @@ class AuthServiceTest {
     @Mock
     private JwtService jwtService;
 
-    // BCrypt real (no mockeado): el test de login depende de que el hash generado
-    // en el registro y la verificación en el login sean consistentes de verdad.
+    // BCrypt real (no mockeado): así se puede verificar de verdad el hash guardado y el del login.
     private final BCryptPasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
 
     private AuthService authService;
@@ -54,6 +55,12 @@ class AuthServiceTest {
 
         assertThat(response.id()).isEqualTo("1");
         assertThat(response.email()).isEqualTo("fan@quienjuega.com");
+
+        ArgumentCaptor<Fan> saved = ArgumentCaptor.forClass(Fan.class);
+        verify(fanRepository).save(saved.capture());
+        assertThat(saved.getValue().getPassword()).isNotEqualTo("fan123");
+        assertThat(passwordEncoder.matches("fan123", saved.getValue().getPassword())).isTrue();
+        assertThat(saved.getValue().getRole()).isEqualTo(FanRole.FAN);
     }
 
     @Test

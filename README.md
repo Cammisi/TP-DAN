@@ -61,7 +61,7 @@ El detalle del avance, las tareas pendientes y el orden en que hay que abordarla
 ## Estructura del repositorio
 
 ```
-tp-deportes-nube/
+TP-DAN/
 ├── backend-app/
 │   ├── infrastructure/
 │   │   ├── eureka-server/              # Service Discovery — puerto 8761
@@ -109,7 +109,7 @@ docker compose down -v
 
 El orden de arranque está gobernado por `depends_on` con `condition: service_healthy`: las bases de datos y Kafka deben pasar su healthcheck antes de que arranquen los microservicios correspondientes, y `eureka-server` debe estar saludable antes que cualquier cliente Eureka.
 
-> El levantamiento de los 13 contenedores y el recorrido funcional de punta a punta (registro → login → catálogo → suscripción → evento → alerta, con la seguridad de T-40/T-41 activa) están verificados de punta a punta — ver **Cómo probar** abajo.
+> El levantamiento de los 14 contenedores y el recorrido funcional de punta a punta (registro → login → catálogo → suscripción → evento → alerta, con la seguridad de T-40/T-41 activa) están verificados de punta a punta — ver **Cómo probar** abajo.
 
 ## Cómo probar
 

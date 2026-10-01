@@ -239,9 +239,7 @@ services:
     build:
       context: ./frontend-app
       args:
-        # Build-time: Next.js inlinea NEXT_PUBLIC_* en el bundle del browser.
-        # Apunta a localhost porque quien lo resuelve es el navegador del usuario,
-        # no otro contenedor de la red Docker.
+        # ver explicacion_docker_compose.md: build arg y localhost a propósito
         NEXT_PUBLIC_GATEWAY_URL: http://localhost:8080
     container_name: frontend-app
     ports:

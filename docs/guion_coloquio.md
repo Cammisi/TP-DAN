@@ -16,7 +16,7 @@ Cubre los 8 requisitos obligatorios del enunciado (`docs/enunciado.md`) más la 
 
 ### 1. Arquitectura y Docker (2 min) — quien presente el carril C
 
-- Mostrar `docker compose ps`: 13 contenedores `healthy`. Requisito: **"Ejecutar las aplicaciones en contenedores Docker."**
+- Mostrar `docker compose ps`: 14 contenedores, los 9 que declaran healthcheck en `healthy` y `kafka-ui`, `prometheus`, `grafana`, `loki` y `promtail` en `Up` (no declaran healthcheck). Requisito: **"Ejecutar las aplicaciones en contenedores Docker."**
 - Un diagrama rápido (el de `README.md`, sección Arquitectura) explicando: 3 microservicios Spring Boot + 1 frontend Next.js, cada uno con su base. Requisito: **"Distribuir la aplicación en al menos 3 microservicios Spring Boot y un frontend."**
 - Abrir Eureka (`http://localhost:8761`): los 4 clientes (`FAN-IDENTITY-SERVICE`, `MATCH-INGESTION-SERVICE`, `ALERT-DISPATCHER-SERVICE`, `CLOUD-GATEWAY`) registrados. Requisito: **"Ejecutar las aplicaciones detrás de Spring Cloud Gateway y Eureka."**
 

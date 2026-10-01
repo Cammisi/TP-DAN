@@ -1,6 +1,7 @@
 package com.tpnube.match_ingestion_service.service;
 
 import com.tpnube.match_ingestion_service.domain.Match;
+import com.tpnube.match_ingestion_service.domain.MatchEvent;
 import com.tpnube.match_ingestion_service.domain.MatchStatus;
 import com.tpnube.match_ingestion_service.dto.MatchEventDTO;
 import com.tpnube.match_ingestion_service.kafka.MatchEventPublisher;
@@ -9,15 +10,18 @@ import com.tpnube.match_ingestion_service.repository.MatchRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.Instant;
 import java.util.Optional;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -91,5 +95,28 @@ class MatchEventServiceTest {
         assertThatThrownBy(() -> matchEventService.ingestEvent("match-001", request))
                 .isInstanceOf(MatchEventService.InvalidEventException.class);
         verify(matchEventRepository, never()).save(any());
+    }
+
+    @Test
+    void unFinDePartidoSeGuardaYPublicaConElMatchId() {
+        Match match = new Match("match-001", "team-colon", "team-union", MatchStatus.LIVE, Instant.now(), 1, 0);
+        when(matchRepository.findById("match-001")).thenReturn(Optional.of(match));
+        MatchEventDTO request = new MatchEventDTO(
+                null, "match-001", null, "MATCH_END", 90, "Final", null, null, 1, 0, Instant.now());
+
+        matchEventService.ingestEvent("match-001", request);
+
+        ArgumentCaptor<MatchEvent> saved = ArgumentCaptor.forClass(MatchEvent.class);
+        verify(matchEventRepository).save(saved.capture());
+        assertThat(saved.getValue().getMatchId()).isEqualTo("match-001");
+
+        ArgumentCaptor<MatchEventDTO> published = ArgumentCaptor.forClass(MatchEventDTO.class);
+        verify(matchEventPublisher, times(2)).publish(published.capture());
+        assertThat(published.getAllValues())
+                .extracting(MatchEventDTO::matchId)
+                .containsOnly("match-001");
+        assertThat(published.getAllValues())
+                .extracting(MatchEventDTO::teamId)
+                .containsExactly("team-colon", "team-union");
     }
 }

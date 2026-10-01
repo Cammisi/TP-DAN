@@ -14,7 +14,7 @@ function groupByLeague(subscriptions) {
   return Array.from(groups.entries());
 }
 
-function SubscriptionsPage() {
+function SubscriptionsContent() {
   const [subscriptions, setSubscriptions] = useState([]);
   const [teams, setTeams] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
@@ -89,87 +89,91 @@ function SubscriptionsPage() {
   const leagueGroups = groupByLeague(subscriptions);
 
   return (
+    <AppLayout title="Suscripciones">
+      {error && <p className={styles.error}>{error}</p>}
+
+      <section className={styles.section}>
+        <h2 className={styles.sectionTitle}>Buscar equipos</h2>
+        <input
+          type="search"
+          placeholder="Buscar por nombre…"
+          value={searchTerm}
+          onChange={(event) => setSearchTerm(event.target.value)}
+          className={styles.search}
+        />
+        {isLoading ? (
+          <p className={styles.muted}>Cargando…</p>
+        ) : teams.length === 0 ? (
+          <p className={styles.muted}>No se encontraron equipos.</p>
+        ) : (
+          <ul className={styles.teamList}>
+            {teams.map((team) => {
+              const isSubscribed = subscribedIds.has(team.id);
+              return (
+                <li key={team.id} className={styles.teamRow}>
+                  <div>
+                    <div className={styles.teamName}>{team.name}</div>
+                    <div className={styles.leagueName}>{team.leagueName}</div>
+                  </div>
+                  <button
+                    type="button"
+                    className={isSubscribed ? styles.toggleOn : styles.toggleOff}
+                    disabled={pendingTeamId === team.id}
+                    onClick={() => handleToggle(team)}
+                  >
+                    {isSubscribed ? "Siguiendo" : "Seguir"}
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </section>
+
+      <section className={styles.section}>
+        <h2 className={styles.sectionTitle}>Mis suscripciones</h2>
+        {!isLoading && subscriptions.length === 0 && (
+          <p className={styles.muted}>Todavía no seguís ningún equipo.</p>
+        )}
+        {leagueGroups.map(([leagueName, subs]) => (
+          <div key={leagueName} className={styles.leagueGroup}>
+            <h3 className={styles.leagueHeading}>{leagueName}</h3>
+            <ul className={styles.teamList}>
+              {subs.map((sub) => (
+                <li key={sub.teamId} className={styles.teamRow}>
+                  <div className={styles.teamName}>{sub.teamName}</div>
+                  <button
+                    type="button"
+                    className={styles.toggleOn}
+                    disabled={pendingTeamId === sub.teamId}
+                    onClick={() =>
+                      handleToggle({
+                        id: sub.teamId,
+                        name: sub.teamName,
+                        leagueId: sub.leagueId,
+                        leagueName: sub.leagueName,
+                      })
+                    }
+                  >
+                    Dejar de seguir
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ))}
+      </section>
+    </AppLayout>
+  );
+}
+
+export default function Subscriptions() {
+  return (
     <RequireAuth>
       <Head>
         <title>Suscripciones — ¿Quién Juega?</title>
       </Head>
-      <AppLayout title="Suscripciones">
-        {error && <p className={styles.error}>{error}</p>}
-
-        <section className={styles.section}>
-          <h2 className={styles.sectionTitle}>Buscar equipos</h2>
-          <input
-            type="search"
-            placeholder="Buscar por nombre…"
-            value={searchTerm}
-            onChange={(event) => setSearchTerm(event.target.value)}
-            className={styles.search}
-          />
-          {isLoading ? (
-            <p className={styles.muted}>Cargando…</p>
-          ) : teams.length === 0 ? (
-            <p className={styles.muted}>No se encontraron equipos.</p>
-          ) : (
-            <ul className={styles.teamList}>
-              {teams.map((team) => {
-                const isSubscribed = subscribedIds.has(team.id);
-                return (
-                  <li key={team.id} className={styles.teamRow}>
-                    <div>
-                      <div className={styles.teamName}>{team.name}</div>
-                      <div className={styles.leagueName}>{team.leagueName}</div>
-                    </div>
-                    <button
-                      type="button"
-                      className={isSubscribed ? styles.toggleOn : styles.toggleOff}
-                      disabled={pendingTeamId === team.id}
-                      onClick={() => handleToggle(team)}
-                    >
-                      {isSubscribed ? "Siguiendo" : "Seguir"}
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-        </section>
-
-        <section className={styles.section}>
-          <h2 className={styles.sectionTitle}>Mis suscripciones</h2>
-          {!isLoading && subscriptions.length === 0 && (
-            <p className={styles.muted}>Todavía no seguís ningún equipo.</p>
-          )}
-          {leagueGroups.map(([leagueName, subs]) => (
-            <div key={leagueName} className={styles.leagueGroup}>
-              <h3 className={styles.leagueHeading}>{leagueName}</h3>
-              <ul className={styles.teamList}>
-                {subs.map((sub) => (
-                  <li key={sub.teamId} className={styles.teamRow}>
-                    <div className={styles.teamName}>{sub.teamName}</div>
-                    <button
-                      type="button"
-                      className={styles.toggleOn}
-                      disabled={pendingTeamId === sub.teamId}
-                      onClick={() =>
-                        handleToggle({
-                          id: sub.teamId,
-                          name: sub.teamName,
-                          leagueId: sub.leagueId,
-                          leagueName: sub.leagueName,
-                        })
-                      }
-                    >
-                      Dejar de seguir
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ))}
-        </section>
-      </AppLayout>
+      <SubscriptionsContent />
     </RequireAuth>
   );
 }
-
-export default SubscriptionsPage;

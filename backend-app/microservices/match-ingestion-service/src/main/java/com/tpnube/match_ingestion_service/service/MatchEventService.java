@@ -50,7 +50,7 @@ public class MatchEventService {
         MatchEvent event = switch (type) {
             case GOAL -> buildGoalEvent(match, request);
             case CARD -> buildCardEvent(match, request);
-            case MATCH_END -> buildMatchEndEvent(request);
+            case MATCH_END -> buildMatchEndEvent(match, request);
         };
         event.setMinute(minute);
         event.setDescription(request.description());
@@ -60,7 +60,7 @@ public class MatchEventService {
         applyToMatch(match, type, event);
         publish(match, type, event);
 
-        log.info("Evento ingestade exitosamente: eventId={}, matchId={}, teamId={}, type={}",
+        log.info("Evento ingestado exitosamente: eventId={}, matchId={}, teamId={}, type={}",
                 event.getId(), match.getId(), event.getTeamId(), type);
 
         return event.getId();
@@ -152,12 +152,13 @@ public class MatchEventService {
         return event;
     }
 
-    private MatchEvent buildMatchEndEvent(MatchEventDTO request) {
+    private MatchEvent buildMatchEndEvent(Match match, MatchEventDTO request) {
         // El fin del partido es de los dos equipos: no se guarda un teamId único.
         int homeScore = requireNonNegative(request.homeScore(), "homeScore");
         int awayScore = requireNonNegative(request.awayScore(), "awayScore");
 
         MatchEvent event = new MatchEvent();
+        event.setMatchId(match.getId());
         event.setType(EventType.MATCH_END);
         event.setHomeScore(homeScore);
         event.setAwayScore(awayScore);

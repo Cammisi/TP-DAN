@@ -84,4 +84,4 @@ Requiere el resto del stack (al menos `cloud-gateway` y los tres microservicios)
 
 ## 7. Gotcha de Docker: el server standalone y `HOSTNAME`
 
-Si se vuelve a tocar el `Dockerfile` del frontend: el server que genera `next build` con `output: "standalone"` usa la variable de entorno `HOSTNAME` para decidir en qué interfaz escuchar. Docker le setea `HOSTNAME` automáticamente al id del contenedor en **todo** contenedor, así que sin `ENV HOSTNAME=0.0.0.0` explícito en el Dockerfile, el server queda escuchando solo en la IP interna de la red Docker: el contenedor arranca, pero ni el healthcheck ni el puerto publicado al host lo alcanzan. Detalle completo en el gotcha de `CLAUDE.md`.
+Si se vuelve a tocar el `Dockerfile` del frontend, no sacar `ENV HOSTNAME=0.0.0.0`: sin eso el contenedor arranca pero nunca pasa a `healthy`. El porqué está en el gotcha de `CLAUDE.md` y en `explicacion_docker_compose.md` (sección `frontend-app`).

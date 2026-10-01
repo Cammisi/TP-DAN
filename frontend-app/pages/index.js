@@ -11,15 +11,21 @@ function HomeContent() {
   const { session } = useSession();
   const [subscriptionCount, setSubscriptionCount] = useState(null);
   const [notificationCount, setNotificationCount] = useState(null);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
-    getSubscriptions().then((subs) => setSubscriptionCount(subs.length)).catch(() => {});
-    getNotifications().then((n) => setNotificationCount(n.length)).catch(() => {});
+    getSubscriptions()
+      .then((subs) => setSubscriptionCount(subs.length))
+      .catch((err) => setError(err.message));
+    getNotifications()
+      .then((n) => setNotificationCount(n.length))
+      .catch((err) => setError(err.message));
   }, []);
 
   return (
     <AppLayout title="Panel Principal">
       <p className={styles.greeting}>Hola, {session?.email}.</p>
+      {error && <p className={styles.error}>{error}</p>}
       <div className={styles.cards}>
         <Link href="/subscriptions" className={styles.card}>
           <span className={styles.cardNumber}>{subscriptionCount ?? "…"}</span>
