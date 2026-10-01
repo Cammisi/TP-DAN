@@ -54,7 +54,7 @@ El catálogo de ligas y equipos vive en `fan-identity-service` y no en `match-in
 
 ## Estado del proyecto
 
-Backend y frontend están completos y verificados en ejecución: infraestructura (Eureka, gateway, Docker Compose con Postgres, MongoDB, Kafka y el stack de observabilidad), los tres microservicios de negocio, seguridad de punta a punta (JWT, rol admin, CORS, endpoints internos protegidos), métricas y logs centralizados, y el frontend en Next.js (login/registro, catálogo y suscripciones, centro de alertas, panel de administrador). Tests automatizados y la colección de requests reproducible también están hechos. Falta el ensayo final del coloquio (T-73).
+Backend y frontend están completos y verificados en ejecución: infraestructura (Eureka, gateway, Docker Compose con Postgres, MongoDB, Kafka y el stack de observabilidad), los tres microservicios de negocio, seguridad de punta a punta (JWT, rol admin, CORS, endpoints internos protegidos), métricas y logs centralizados, y el frontend en Next.js (login/registro, catálogo y suscripciones, centro de alertas, panel de administrador). Tests automatizados y la colección de requests reproducible también están hechos. Falta el ensayo final del coloquio (T-73) y que Kafka arranque bien desde cero (T-74).
 
 El detalle del avance, las tareas pendientes y el orden en que hay que abordarlas están en **[docs/planificacion_global.md](docs/planificacion_global.md)**.
 
