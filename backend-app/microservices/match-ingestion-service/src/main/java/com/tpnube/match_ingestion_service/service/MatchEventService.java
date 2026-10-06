@@ -15,11 +15,13 @@ import org.springframework.stereotype.Service;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Locale;
 
 @Service
 public class MatchEventService {
 
     private static final Logger log = LoggerFactory.getLogger(MatchEventService.class);
+    private static final int MAX_CUSTOM_TYPE_LENGTH = 40;
 
     private final MatchRepository matchRepository;
     private final MatchEventRepository matchEventRepository;
@@ -38,7 +40,8 @@ public class MatchEventService {
             throw new InvalidEventException("El matchId del body no coincide con el de la URL");
         }
 
-        EventType type = parseType(request.type());
+        String type = normalizeType(request.type());
+        EventType known = EventType.find(type);
         Integer minute = request.minute();
         if (minute == null || minute < 0) {
             throw new InvalidEventException("El minute es obligatorio y no puede ser negativo");
@@ -47,18 +50,20 @@ public class MatchEventService {
         Match match = matchRepository.findById(matchId)
                 .orElseThrow(() -> new MatchNotFoundException(matchId));
 
-        MatchEvent event = switch (type) {
-            case GOAL -> buildGoalEvent(match, request);
-            case CARD -> buildCardEvent(match, request);
-            case MATCH_END -> buildMatchEndEvent(match, request);
-        };
+        MatchEvent event = known == null
+                ? buildCustomEvent(match, type, request)
+                : switch (known) {
+                    case GOAL -> buildGoalEvent(match, request);
+                    case CARD -> buildCardEvent(match, request);
+                    case MATCH_END -> buildMatchEndEvent(match, request);
+                };
         event.setMinute(minute);
         event.setDescription(request.description());
         event.setOccurredAt(request.occurredAt() != null ? request.occurredAt() : Instant.now());
 
         matchEventRepository.save(event);
-        applyToMatch(match, type, event);
-        publish(match, type, event);
+        applyToMatch(match, known, event);
+        publish(match, known, event);
 
         log.info("Evento ingestado exitosamente: eventId={}, matchId={}, teamId={}, type={}",
                 event.getId(), match.getId(), event.getTeamId(), type);
@@ -76,15 +81,16 @@ public class MatchEventService {
                 .toList();
     }
 
-    private EventType parseType(String rawType) {
+    // Mayúsculas para que "goal" y "GOAL" sean el mismo tipo conocido.
+    private String normalizeType(String rawType) {
         if (rawType == null || rawType.isBlank()) {
             throw new InvalidEventException("El type es obligatorio");
         }
-        try {
-            return EventType.valueOf(rawType);
-        } catch (IllegalArgumentException e) {
-            throw new InvalidEventException("El type debe ser GOAL, CARD o MATCH_END");
+        String type = rawType.trim().toUpperCase(Locale.ROOT);
+        if (type.length() > MAX_CUSTOM_TYPE_LENGTH) {
+            throw new InvalidEventException("El type no puede superar los " + MAX_CUSTOM_TYPE_LENGTH + " caracteres");
         }
+        return type;
     }
 
     private CardType parseCardType(String rawCardType) {
@@ -131,10 +137,21 @@ public class MatchEventService {
         MatchEvent event = new MatchEvent();
         event.setMatchId(match.getId());
         event.setTeamId(teamId);
-        event.setType(EventType.GOAL);
+        event.setType(EventType.GOAL.name());
         event.setPlayerName(playerName);
         event.setHomeScore(homeScore);
         event.setAwayScore(awayScore);
+        return event;
+    }
+
+    // Tipo libre (penal, suspensión, etc.): necesita equipo, no cambia el marcador.
+    private MatchEvent buildCustomEvent(Match match, String type, MatchEventDTO request) {
+        String teamId = requireTeamInMatch(match, request.teamId());
+
+        MatchEvent event = new MatchEvent();
+        event.setMatchId(match.getId());
+        event.setTeamId(teamId);
+        event.setType(type);
         return event;
     }
 
@@ -146,7 +163,7 @@ public class MatchEventService {
         MatchEvent event = new MatchEvent();
         event.setMatchId(match.getId());
         event.setTeamId(teamId);
-        event.setType(EventType.CARD);
+        event.setType(EventType.CARD.name());
         event.setPlayerName(playerName);
         event.setCardType(cardType);
         return event;
@@ -159,32 +176,37 @@ public class MatchEventService {
 
         MatchEvent event = new MatchEvent();
         event.setMatchId(match.getId());
-        event.setType(EventType.MATCH_END);
+        event.setType(EventType.MATCH_END.name());
         event.setHomeScore(homeScore);
         event.setAwayScore(awayScore);
         return event;
     }
 
     // Cada evento deja el partido reflejando lo que acaba de pasar (marcador y status).
-    private void applyToMatch(Match match, EventType type, MatchEvent event) {
-        switch (type) {
-            case GOAL -> {
-                match.setHomeScore(event.getHomeScore());
-                match.setAwayScore(event.getAwayScore());
-                match.setStatus(MatchStatus.LIVE);
-            }
-            case CARD -> match.setStatus(MatchStatus.LIVE);
-            case MATCH_END -> {
-                match.setHomeScore(event.getHomeScore());
-                match.setAwayScore(event.getAwayScore());
-                match.setStatus(MatchStatus.FINISHED);
+    // Un tipo libre (known == null) marca el partido en vivo pero no toca el marcador.
+    private void applyToMatch(Match match, EventType known, MatchEvent event) {
+        if (known == null) {
+            match.setStatus(MatchStatus.LIVE);
+        } else {
+            switch (known) {
+                case GOAL -> {
+                    match.setHomeScore(event.getHomeScore());
+                    match.setAwayScore(event.getAwayScore());
+                    match.setStatus(MatchStatus.LIVE);
+                }
+                case CARD -> match.setStatus(MatchStatus.LIVE);
+                case MATCH_END -> {
+                    match.setHomeScore(event.getHomeScore());
+                    match.setAwayScore(event.getAwayScore());
+                    match.setStatus(MatchStatus.FINISHED);
+                }
             }
         }
         matchRepository.save(match);
     }
 
-    private void publish(Match match, EventType type, MatchEvent event) {
-        if (type == EventType.MATCH_END) {
+    private void publish(Match match, EventType known, MatchEvent event) {
+        if (known == EventType.MATCH_END) {
             // Un mensaje por equipo participante, mismo eventId (contrato T-01 sección 5).
             matchEventPublisher.publish(toDTO(event, match.getHomeTeamId()));
             matchEventPublisher.publish(toDTO(event, match.getAwayTeamId()));
@@ -199,7 +221,7 @@ public class MatchEventService {
                 event.getId(),
                 event.getMatchId(),
                 teamId,
-                event.getType().name(),
+                event.getType(),
                 event.getMinute(),
                 event.getDescription(),
                 event.getPlayerName(),

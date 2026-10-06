@@ -513,6 +513,18 @@ La Fase 0 y la Fase 2 se hacen **juntos**: definen contratos y tocan puntos de i
     - [ ] La documentación dice dónde persiste Kafka y quién crea el tópico.
   - **Terminada cuando:** tras `docker compose down -v && docker compose up -d --build`, el primer evento ingestado le llega al fan en segundos y no en minutos; y tras `docker compose down && docker compose up -d`, `match-events` sigue existiendo con 3 particiones.
 
+- [ ] **T-75 · Admin: buscar partidos y tipos de evento libres** — `match-ingestion-service`, `alert-dispatcher-service`, `frontend-app/` (`/admin`, `/alerts`) · depende de: T-21, T-30, T-65, T-64 · carril C
+  - **Qué:** (1) en `/admin`, el selector de partido se puede filtrar escribiendo un equipo o un id (ignora tildes); (2) el tipo de evento acepta **texto libre** además de Gol/Tarjeta/Fin del partido (ej. "Penal", "Suspensión") — los tres tipos con reglas propias siguen igual, y "goal" en minúsculas se maneja como Gol; (3) la alerta muestra el **nombre del equipo** del fan y el partido ("Colón vs Unión").
+  - **Por qué:** pedido por el grupo en la reunión del 2026-10-06. Con una base grande, el selector fijo de partidos obliga a buscar a ojo; y los tipos fijos no alcanzan para eventos como penales o suspensiones.
+  - **Afecta:** `EventType`/`MatchEvent` y `MatchEventService` en match-ingestion (el tipo pasa a `String` en el documento Mongo, compatible con los datos existentes); `AlertDispatchService.buildMessage` en alert-dispatcher (el `default` arma "Penal (33') — descripción"); `pages/admin.js` y `pages/alerts.js`; contrato en `explicacion_contratos_api.md` (sección 3, `type` admite texto libre de hasta 40 caracteres).
+  - **Requisitos:**
+    - [ ] Filtrar el selector de partidos por equipo o id, sin tildes.
+    - [x] Un tipo libre se guarda en mayúsculas, requiere equipo del partido, no cambia el marcador y se publica a Kafka con su nombre. *Verificado 2026-10-06 con el stack: "penal" quedó como PENAL, el marcador 3-1 no cambió; "suspension del partido" se publicó con su nombre.*
+    - [x] Un tipo libre llega como alerta con un mensaje legible ("Penal (33') — …"). *Verificado: el fan1 recibió "Suspension del partido (70') — Corte de luz en la tribuna" (3 notificaciones, 0 fallidas).*
+    - [ ] La alerta muestra el equipo del fan y el partido con nombres, no ids.
+  - **Decisiones tomadas:** los tipos conocidos no cambian; el texto libre no tiene lista cerrada. Los nombres de equipo en la alerta se resuelven en el frontend con el catálogo: alert-dispatcher no tiene catálogo (D-1), así que no se agregaron al mensaje guardado.
+  - **Terminada cuando:** en `/admin` se encuentra un partido escribiendo parte de un equipo; se ingesta un "Penal" y el fan que sigue ese equipo ve en `/alerts` "Penal (…) — …" con el nombre del equipo. **Pendiente:** la parte de `/admin` (buscar partido) y el nombre del equipo en `/alerts` están compilados y revisados por código, pero falta verificarlos en el navegador. Marcar la tarea cuando se confirmen.
+
 ---
 
 ## 7. Resumen de avance

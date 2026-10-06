@@ -5,11 +5,19 @@ import AppLayout from "@/components/AppLayout";
 import { getMatches, getCatalogTeams, ingestMatchEvent, getAlertsStatus } from "@/lib/api";
 import styles from "@/styles/Admin.module.css";
 
+const CUSTOM_TYPE = "CUSTOM";
+
 const EVENT_TYPES = [
   { value: "GOAL", label: "Gol" },
   { value: "CARD", label: "Tarjeta" },
   { value: "MATCH_END", label: "Fin del partido" },
+  { value: CUSTOM_TYPE, label: "Otro (texto libre)" },
 ];
+
+// Minúsculas y sin tildes, para que "colon" encuentre "Colón".
+function normalize(text) {
+  return text.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+}
 
 const MONITORING_LINKS = [
   { href: "http://localhost:8761", label: "Eureka" },
@@ -21,7 +29,9 @@ function AdminContent() {
   const [matches, setMatches] = useState([]);
   const [teamNames, setTeamNames] = useState({});
   const [matchId, setMatchId] = useState("");
+  const [matchQuery, setMatchQuery] = useState("");
   const [type, setType] = useState("GOAL");
+  const [customType, setCustomType] = useState("");
   const [teamId, setTeamId] = useState("");
   const [minute, setMinute] = useState("");
   const [description, setDescription] = useState("");
@@ -67,6 +77,28 @@ function AdminContent() {
     loadStatus();
   }, [loadStatus]);
 
+  const matchLabel = (match) =>
+    `${teamNames[match.homeTeamId] ?? match.homeTeamId} vs ${teamNames[match.awayTeamId] ?? match.awayTeamId} (${match.status})`;
+
+  function filterMatches(query) {
+    const q = normalize(query.trim());
+    if (!q) return matches;
+    return matches.filter(
+      (match) => normalize(matchLabel(match)).includes(q) || match.id.toLowerCase().includes(q)
+    );
+  }
+
+  const filteredMatches = filterMatches(matchQuery);
+
+  function handleMatchSearch(query) {
+    setMatchQuery(query);
+    const visible = filterMatches(query);
+    // Si el partido elegido quedó oculto, no dejar que el formulario lo siga enviando.
+    if (!visible.some((match) => match.id === matchId)) {
+      setMatchId(visible[0]?.id ?? "");
+    }
+  }
+
   const teamOptions = useMemo(() => {
     if (!selectedMatch) return [];
     return [selectedMatch.homeTeamId, selectedMatch.awayTeamId].map((id) => ({
@@ -74,6 +106,13 @@ function AdminContent() {
       name: teamNames[id] ?? id,
     }));
   }, [selectedMatch, teamNames]);
+
+  // Qué campos pide cada tipo (contrato T-01, sección 3.1). "Otro" es solo de la UI:
+  // se manda como texto libre en el campo type.
+  const isCustom = type === CUSTOM_TYPE;
+  const needsTeam = type !== "MATCH_END";
+  const needsPlayer = type === "GOAL" || type === "CARD";
+  const needsScores = type === "GOAL" || type === "MATCH_END";
 
   async function handleSubmit(event) {
     event.preventDefault();
@@ -83,14 +122,14 @@ function AdminContent() {
     try {
       const dto = {
         matchId,
-        teamId: type === "MATCH_END" ? null : teamId,
-        type,
+        teamId: needsTeam ? teamId : null,
+        type: isCustom ? customType.trim() : type,
         minute: Number(minute),
         description,
-        playerName: type === "MATCH_END" ? null : playerName,
+        playerName: needsPlayer ? playerName : null,
         cardType: type === "CARD" ? cardType : null,
-        homeScore: type !== "CARD" ? Number(homeScore) : null,
-        awayScore: type !== "CARD" ? Number(awayScore) : null,
+        homeScore: needsScores ? Number(homeScore) : null,
+        awayScore: needsScores ? Number(awayScore) : null,
         occurredAt: new Date().toISOString(),
       };
       const result = await ingestMatchEvent(matchId, dto);
@@ -108,16 +147,31 @@ function AdminContent() {
       <section className={styles.section}>
         <h2 className={styles.sectionTitle}>Simular evento</h2>
         <form onSubmit={handleSubmit} className={styles.form}>
-          <div className={styles.field}>
-            <label htmlFor="match">Partido</label>
-            <select id="match" value={matchId} onChange={(e) => setMatchId(e.target.value)}>
-              {matches.map((match) => (
+          <div className={styles.fieldWide}>
+            <label htmlFor="matchSearch">Partido</label>
+            <input
+              id="matchSearch"
+              type="search"
+              placeholder="Buscar por equipo o id…"
+              value={matchQuery}
+              onChange={(e) => handleMatchSearch(e.target.value)}
+            />
+            <select
+              id="match"
+              size={Math.min(Math.max(filteredMatches.length, 2), 6)}
+              value={matchId}
+              onChange={(e) => setMatchId(e.target.value)}
+              required
+            >
+              {filteredMatches.map((match) => (
                 <option key={match.id} value={match.id}>
-                  {teamNames[match.homeTeamId] ?? match.homeTeamId} vs{" "}
-                  {teamNames[match.awayTeamId] ?? match.awayTeamId} ({match.status})
+                  {matchLabel(match)}
                 </option>
               ))}
             </select>
+            {filteredMatches.length === 0 && (
+              <span className={styles.muted}>Ningún partido coincide con la búsqueda.</span>
+            )}
           </div>
 
           <div className={styles.field}>
@@ -131,7 +185,22 @@ function AdminContent() {
             </select>
           </div>
 
-          {type !== "MATCH_END" && (
+          {isCustom && (
+            <div className={styles.field}>
+              <label htmlFor="customType">Nombre del evento</label>
+              <input
+                id="customType"
+                type="text"
+                maxLength={40}
+                placeholder="Ej: Penal, Suspensión"
+                required
+                value={customType}
+                onChange={(e) => setCustomType(e.target.value)}
+              />
+            </div>
+          )}
+
+          {needsTeam && (
             <div className={styles.field}>
               <label htmlFor="team">Equipo</label>
               <select id="team" value={teamId} onChange={(e) => setTeamId(e.target.value)} required>
@@ -167,7 +236,7 @@ function AdminContent() {
             />
           </div>
 
-          {type !== "MATCH_END" && (
+          {needsPlayer && (
             <div className={styles.field}>
               <label htmlFor="playerName">Jugador</label>
               <input
@@ -190,7 +259,7 @@ function AdminContent() {
             </div>
           )}
 
-          {type !== "CARD" && (
+          {needsScores && (
             <>
               <div className={styles.field}>
                 <label htmlFor="homeScore">Marcador local</label>

@@ -88,6 +88,21 @@ class AlertDispatchServiceTest {
     }
 
     @Test
+    void unTipoLibreSeDescribeEnElMensajeDeLaAlerta() {
+        AlertDispatchService service = new AlertDispatchService(
+                fanIdentityLookupService, fanIdentityClient, dispatcherStatusService);
+        MatchEventDTO tiroLibre = new MatchEventDTO(
+                "evt-2", "match-001", "team-colon", "TIRO_LIBRE", 33, "Lo cobró Colón", null, null, null, null, Instant.now());
+        when(fanIdentityLookupService.getSubscribers("team-colon"))
+                .thenReturn(List.of(new FanSubscriberDTO("1", "fan1@quienjuega.com")));
+
+        service.dispatch(tiroLibre);
+
+        verify(fanIdentityClient).createNotification(
+                argThat(req -> "Tiro libre (33') — Lo cobró Colón".equals(req.message())));
+    }
+
+    @Test
     void unEventoSinSuscriptoresDisponiblesSeRegistraComoNoDespachado() {
         AlertDispatchService service = new AlertDispatchService(
                 fanIdentityLookupService, fanIdentityClient, dispatcherStatusService);

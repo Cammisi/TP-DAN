@@ -10,6 +10,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.Locale;
 
 // Separado de MatchEventListener para poder testear con Mockito sin levantar Kafka.
 @Service
@@ -85,9 +86,16 @@ public class AlertDispatchService {
                     "RED".equals(event.cardType()) ? "roja" : "amarilla", event.playerName(), event.minute());
             case "MATCH_END" -> "Final del partido — resultado %d-%d".formatted(
                     event.homeScore(), event.awayScore());
-            default -> event.description() != null
-                    ? event.description()
-                    : "Nuevo evento en el partido " + event.matchId();
+            default -> buildCustomMessage(event);
         };
+    }
+
+    // Tipo libre (ej. "PENAL", "TIRO LIBRE"): "Penal (33') — descripción".
+    private String buildCustomMessage(MatchEventDTO event) {
+        String tipo = event.type().toLowerCase(Locale.ROOT).replace('_', ' ');
+        tipo = Character.toUpperCase(tipo.charAt(0)) + tipo.substring(1);
+        String minuto = event.minute() != null ? " (" + event.minute() + "')" : "";
+        boolean tieneDetalle = event.description() != null && !event.description().isBlank();
+        return tipo + minuto + (tieneDetalle ? " — " + event.description() : "");
     }
 }

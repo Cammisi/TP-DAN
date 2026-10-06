@@ -74,7 +74,7 @@ public class DataSeeder implements ApplicationRunner {
         if (matchEventRepository.existsById(id)) {
             return;
         }
-        MatchEvent event = new MatchEvent(id, matchId, teamId, type, minute, description, occurredAt,
+        MatchEvent event = new MatchEvent(id, matchId, teamId, type.name(), minute, description, occurredAt,
                 playerName, cardType, homeScore, awayScore);
         matchEventRepository.save(event);
         log.info("Evento sembrado: {} ({})", id, type);

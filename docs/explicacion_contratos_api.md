@@ -144,7 +144,8 @@ Todos bajo `/api/matches/**`.
 **POST /api/matches/{matchId}/events** — ingesta (también la usa el admin para simular)
 - Request: `MatchEventDTO` sin `eventId` (lo genera el servicio).
 - 201: `{ "eventId": string }`
-- 400 `INVALID_EVENT` si falta un campo obligatorio o el `type` no es uno de los soportados. No persiste.
+- 400 `INVALID_EVENT` si falta un campo obligatorio, si el `type` está vacío o supera los 40 caracteres. No persiste.
+- `type` sin reglas propias se acepta como texto libre (T-75): se guarda en mayúsculas y el partido queda `LIVE` sin cambiar el marcador. Requiere `teamId` del partido.
 - 404 `MATCH_NOT_FOUND` si `matchId` no existe en su propia base. **No** valida `teamId` contra el catálogo de fan-identity (D-1: no vale la pena la llamada entre servicios).
 
 > **R-7 (resuelto en T-40):** `match-ingestion-service` no tiene Spring Security propio (D-2), así que el rol lo chequea el gateway: con un token de fan este POST devuelve `403 FORBIDDEN` sin llegar al microservicio (ver sección 7).
@@ -158,7 +159,7 @@ public record MatchEventDTO(
     String eventId,       // null en el request de ingesta, lo asigna el servicio
     String matchId,
     String teamId,         // equipo al que pertenece el evento
-    String type,           // "GOAL" | "CARD" | "MATCH_END"
+    String type,           // "GOAL" | "CARD" | "MATCH_END", o texto libre (máx. 40, ej. "PENAL")
     Integer minute,
     String description,
     String playerName,     // solo GOAL y CARD, null en MATCH_END

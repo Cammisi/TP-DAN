@@ -3,7 +3,7 @@ import Head from "next/head";
 import Link from "next/link";
 import RequireAuth from "@/components/RequireAuth";
 import AppLayout from "@/components/AppLayout";
-import { getNotifications } from "@/lib/api";
+import { getNotifications, getCatalogTeams, getMatches } from "@/lib/api";
 import styles from "@/styles/Alerts.module.css";
 
 const dateFormatter = new Intl.DateTimeFormat("es-AR", {
@@ -13,6 +13,8 @@ const dateFormatter = new Intl.DateTimeFormat("es-AR", {
 
 function AlertsContent() {
   const [notifications, setNotifications] = useState([]);
+  const [teamNames, setTeamNames] = useState({});
+  const [matchesById, setMatchesById] = useState({});
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -20,14 +22,27 @@ function AlertsContent() {
     setIsLoading(true);
     setError(null);
     try {
-      const result = await getNotifications();
-      setNotifications(result);
+      // El backend guarda solo ids: los nombres se resuelven acá con el catálogo y los partidos.
+      const [notificationsResult, teamsResult, matchesResult] = await Promise.all([
+        getNotifications(),
+        getCatalogTeams(),
+        getMatches(),
+      ]);
+      setNotifications(notificationsResult);
+      setTeamNames(Object.fromEntries(teamsResult.map((team) => [team.id, team.name])));
+      setMatchesById(Object.fromEntries(matchesResult.map((match) => [match.id, match])));
     } catch (err) {
       setError(err.message);
     } finally {
       setIsLoading(false);
     }
   }, []);
+
+  function describeMatch(matchId) {
+    const match = matchesById[matchId];
+    if (!match) return null;
+    return `${teamNames[match.homeTeamId] ?? match.homeTeamId} vs ${teamNames[match.awayTeamId] ?? match.awayTeamId}`;
+  }
 
   useEffect(() => {
     load();
@@ -54,10 +69,16 @@ function AlertsContent() {
         {notifications.map((notification) => (
           <li key={notification.id} className={styles.item}>
             <div className={styles.itemHeader}>
+              <span className={styles.team}>
+                {teamNames[notification.teamId] ?? notification.teamId}
+              </span>
               <span className={styles.date}>
                 {dateFormatter.format(new Date(notification.createdAt))}
               </span>
             </div>
+            {describeMatch(notification.matchId) && (
+              <p className={styles.match}>{describeMatch(notification.matchId)}</p>
+            )}
             <p className={styles.message}>{notification.message}</p>
           </li>
         ))}

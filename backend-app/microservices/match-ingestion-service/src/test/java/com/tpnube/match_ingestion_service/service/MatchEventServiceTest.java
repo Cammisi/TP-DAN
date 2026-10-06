@@ -65,16 +65,6 @@ class MatchEventServiceTest {
     }
 
     @Test
-    void rechazaUnTypeNoSoportado() {
-        MatchEventDTO request = new MatchEventDTO(
-                null, "match-001", "team-colon", "PENALTY", 10, "desc", "Jugador", null, 1, 0, Instant.now());
-
-        assertThatThrownBy(() -> matchEventService.ingestEvent("match-001", request))
-                .isInstanceOf(MatchEventService.InvalidEventException.class);
-        verify(matchEventRepository, never()).save(any());
-    }
-
-    @Test
     void rechazaUnEventoDeUnPartidoInexistente() {
         when(matchRepository.findById("match-999")).thenReturn(Optional.empty());
         MatchEventDTO request = new MatchEventDTO(
@@ -118,5 +108,48 @@ class MatchEventServiceTest {
         assertThat(published.getAllValues())
                 .extracting(MatchEventDTO::teamId)
                 .containsExactly("team-colon", "team-union");
+    }
+
+    @Test
+    void unTipoLibreSeGuardaNormalizadoYNoCambiaElMarcador() {
+        Match match = new Match("match-001", "team-colon", "team-union", MatchStatus.LIVE, Instant.now(), 1, 0);
+        when(matchRepository.findById("match-001")).thenReturn(Optional.of(match));
+        MatchEventDTO request = new MatchEventDTO(
+                null, "match-001", "team-colon", " penal ", 33, "Lo cobró Colón", null, null, null, null, Instant.now());
+
+        matchEventService.ingestEvent("match-001", request);
+
+        ArgumentCaptor<MatchEvent> saved = ArgumentCaptor.forClass(MatchEvent.class);
+        verify(matchEventRepository).save(saved.capture());
+        assertThat(saved.getValue().getType()).isEqualTo("PENAL");
+        assertThat(saved.getValue().getTeamId()).isEqualTo("team-colon");
+        assertThat(match.getHomeScore()).isEqualTo(1);
+        assertThat(match.getAwayScore()).isEqualTo(0);
+        assertThat(match.getStatus()).isEqualTo(MatchStatus.LIVE);
+    }
+
+    @Test
+    void unTipoConocidoEscritoEnMinusculasSeManejaComoSuTipo() {
+        Match match = new Match("match-001", "team-colon", "team-union", MatchStatus.LIVE, Instant.now(), 0, 0);
+        when(matchRepository.findById("match-001")).thenReturn(Optional.of(match));
+        MatchEventDTO request = new MatchEventDTO(
+                null, "match-001", "team-colon", "goal", 10, "desc", "Jugador", null, 1, 0, Instant.now());
+
+        matchEventService.ingestEvent("match-001", request);
+
+        ArgumentCaptor<MatchEvent> saved = ArgumentCaptor.forClass(MatchEvent.class);
+        verify(matchEventRepository).save(saved.capture());
+        assertThat(saved.getValue().getType()).isEqualTo("GOAL");
+        assertThat(match.getHomeScore()).isEqualTo(1);
+    }
+
+    @Test
+    void unTipoLibreDemasiadoLargoSeRechaza() {
+        MatchEventDTO request = new MatchEventDTO(
+                null, "match-001", "team-colon", "x".repeat(41), 10, null, null, null, null, null, Instant.now());
+
+        assertThatThrownBy(() -> matchEventService.ingestEvent("match-001", request))
+                .isInstanceOf(MatchEventService.InvalidEventException.class);
+        verify(matchEventRepository, never()).save(any());
     }
 }

@@ -26,7 +26,8 @@ public class MatchEvent {
     // Null en MATCH_END: el fin del partido es de los dos equipos.
     private String teamId;
 
-    private EventType type;
+    // Un EventType conocido (GOAL, CARD, MATCH_END) o un texto libre (ej. PENAL).
+    private String type;
     private Integer minute;
     private String description;
     private Instant occurredAt;
