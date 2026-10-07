@@ -87,7 +87,7 @@ Con el stack arriba, desde Git Bash (`TOKEN_FAN` y `TOKEN_ADMIN` salen del login
 1. `curl -i localhost:8080/api/matches` → `401`, "Falta el token de autenticación". `match-ingestion-service` no tiene seguridad propia: lo cortó el gateway.
 2. Mismo request con un token al que se le cambió un carácter de la firma → `401`, "Token inválido o expirado".
 3. `POST /api/matches/match-001/events` con `TOKEN_FAN` → `403`. Con `TOKEN_ADMIN` → `201`.
-4. `curl -i localhost:8080/internal/fans/subscribers/team-colon` → `401` desde el host.
+4. `curl -i localhost:8080/internal/fans/subscribers/1` → `401` desde el host.
 5. Desde un contenedor en la red Docker, la misma llamada directa a `fan-identity-service:8081` sin header → `401`. Con la clave correcta → `200`. Ver `docs/plan_41_blindar_endpoints_internos.md`, sección 4.
 
 ## 8. Limitaciones aceptadas

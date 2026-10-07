@@ -525,6 +525,28 @@ La Fase 0 y la Fase 2 se hacen **juntos**: definen contratos y tocan puntos de i
   - **Decisiones tomadas:** los tipos conocidos no cambian; el texto libre no tiene lista cerrada. Los nombres de equipo en la alerta se resuelven en el frontend con el catálogo: alert-dispatcher no tiene catálogo (D-1), así que no se agregaron al mensaje guardado.
   - **Terminada cuando:** en `/admin` se encuentra un partido escribiendo parte de un equipo; se ingesta un "Penal" y el fan que sigue ese equipo ve en `/alerts` "Penal (…) — …" con el nombre del equipo. **Pendiente:** la parte de `/admin` (buscar partido) y el nombre del equipo en `/alerts` están compilados y revisados por código, pero falta verificarlos en el navegador. Marcar la tarea cuando se confirmen.
 
+- [x] **T-76 · Admin: crear partidos** — `match-ingestion-service`, `frontend-app/pages/admin.js` · depende de: T-20, T-65 · carril C · [plan](plan_76_admin_crear_partidos.md)
+  - **Qué:** nuevo `POST /api/matches` (admin) que crea un partido elegido por dos equipos del catálogo; en `/admin` se agrega un formulario para esto, y el partido creado aparece de inmediato en el buscador de T-75 con sus dos equipos disponibles en "Equipo".
+  - **Por qué:** pedido por el grupo en la reunión del 2026-10-06. Hoy solo existen los 3 partidos semilla (`DataSeeder`), así que un equipo del catálogo sin partido (ej. Racing Club) nunca puede disparar una alerta.
+  - **Afecta:** `MatchController`/`MatchService` en match-ingestion (nuevo endpoint); `pages/admin.js`, `lib/api.js`; contrato en `explicacion_contratos_api.md` (sección 3).
+  - **Requisitos:**
+    - [x] `POST /api/matches` valida `homeTeamId`/`awayTeamId` obligatorios y distintos entre sí; el partido nace `SCHEDULED` sin marcador. *`MatchServiceTest` (4 casos) + verificado en Docker: mismo equipo como local/visitante → `400 INVALID_MATCH`.*
+    - [x] El gateway ya exige rol `ADMIN` para esto sin cambios (`JwtValidationFilter.isAdminOnly` cubre todo no-`GET` de `/api/matches/**`) — verificado: el `path.startsWith("/api/matches")` de la condición cubre `/api/matches` sin sufijo.
+    - [x] En `/admin`, crear un partido lo deja elegible en el buscador de T-75 sin recargar la página, y el campo "Equipo" muestra los dos equipos elegidos.
+  - **Terminada cuando:** desde `/admin` se crea "River vs Racing", aparece en el buscador, y se puede ingestar un evento para Racing Club (equipo sin partido semilla). *Verificado 2026-10-07 con el stack completo: `POST /api/matches` con `homeTeamId:"3", awayTeamId:"5"` → `201`; se ingestó un `GOAL` y después un `CARD` para el equipo 5 en ese partido nuevo; `fan1` (suscripto a Racing) recibió la alerta del `CARD` ("Tarjeta amarilla para Prueba Racing 2 (40')").*
+
+- [x] **T-77 · IDs numéricos para equipos** — `fan-identity-service` · depende de: T-15 · carril C · [plan](plan_77_ids_numericos_equipos.md)
+  - **Qué:** el id de `Team` pasa de slug manual (`"team-colon"`) a numérico autogenerado (`1, 2, 3, …`), igual que `Fan`/`Subscription`/`Notification`. El contrato HTTP no cambia de tipo: `teamId` sigue viajando como string en JSON/Kafka/Mongo (D-1), solo que ahora contiene dígitos (`"4"`) en vez de un slug.
+  - **Por qué:** pedido por el grupo en la reunión del 2026-10-06 — los slugs manuales no escalan y no son el patrón que ya usa el resto del dominio (`@GeneratedValue(IDENTITY)`).
+  - **Afecta:** `Team`, `TeamRepository`, `CatalogService`, `SubscriptionService`/`SubscriptionRepository`, `DataSeeder` de fan-identity-service; `DataSeeder` de match-ingestion-service (sus partidos/eventos semilla referencian los mismos ids); `docs/quien-juega.http`; `explicacion_contratos_api.md` y `explicacion_modelo_mongo.md` (ejemplos).
+  - **Requisitos:**
+    - [x] `Team.id` es `Long` con `@GeneratedValue(strategy = GenerationType.IDENTITY)`.
+    - [x] Los endpoints que reciben un `teamId` como string (suscripción, internal subscribers) siguen aceptando string y lo parsean a `Long` internamente; un valor no numérico da el mismo error que "no existe" (no un 500). *Verificado: `POST /api/fans/subscriptions` con `teamId:"team-fantasma"` → `404 TEAM_NOT_FOUND`, no `500`.*
+    - [x] Los partidos semilla de match-ingestion-service usan los mismos ids numéricos que genera el `DataSeeder` de fan-identity-service, en el mismo orden de siembra. *Verificado: `GET /api/catalog/teams` da Colón=1, Unión=2, River=3, Boca=4, Racing=5, Liverpool=6, Man City=7; `GET /api/matches` referencia esos mismos ids en match-001/002/003.*
+  - **Decisiones tomadas:** no se tocan los ids de `League` (siguen siendo slugs) ni los de `Match`/`MatchEvent` (siguen siendo ids de Mongo) — el pedido fue específico de equipos.
+  - **Requiere:** recrear el volumen de Postgres (`docker compose down -v` o borrar `postgres_data`) porque `ddl-auto: update` no altera el tipo de una columna existente de `varchar` a `bigint`.
+  - **Terminada cuando:** con un volumen de Postgres limpio, `GET /api/catalog/teams` devuelve ids numéricos y las suscripciones/alertas siguen funcionando de punta a punta con esos ids. *Verificado 2026-10-07 con `docker compose down -v` + `up -d --build`: catálogo con ids `1`..`7`, suscripción de `fan1` a Racing (id `5`) y alerta recibida.*
+
 ---
 
 ## 7. Resumen de avance
@@ -536,8 +558,8 @@ La Fase 0 y la Fase 2 se hacen **juntos**: definen contratos y tocan puntos de i
 | 2 — Integración y seguridad | 3 | 3 |
 | 3 — Requisitos transversales | 2 | 2 |
 | 4 — Frontend | 6 | 6 |
-| 5 — Cierre y entrega | 5 | 3 |
-| **Total** | **31** | **29** |
+| 5 — Cierre y entrega | 7 | 5 |
+| **Total** | **33** | **31** |
 
 > T-66 (Panel Principal) es una tarea **propuesta**, no forma parte del recuento de 31: se agrega a la tabla si el grupo decide tomarla.
 

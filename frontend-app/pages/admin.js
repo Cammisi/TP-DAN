@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Head from "next/head";
 import RequireAuth from "@/components/RequireAuth";
 import AppLayout from "@/components/AppLayout";
-import { getMatches, getCatalogTeams, ingestMatchEvent, getAlertsStatus } from "@/lib/api";
+import { getMatches, getCatalogTeams, ingestMatchEvent, createMatch, getAlertsStatus } from "@/lib/api";
 import styles from "@/styles/Admin.module.css";
 
 const CUSTOM_TYPE = "CUSTOM";
@@ -28,8 +28,15 @@ const MONITORING_LINKS = [
 function AdminContent() {
   const [matches, setMatches] = useState([]);
   const [teamNames, setTeamNames] = useState({});
+  const [catalogTeams, setCatalogTeams] = useState([]);
   const [matchId, setMatchId] = useState("");
   const [matchQuery, setMatchQuery] = useState("");
+
+  const [newHomeTeamId, setNewHomeTeamId] = useState("");
+  const [newAwayTeamId, setNewAwayTeamId] = useState("");
+  const [createMatchError, setCreateMatchError] = useState(null);
+  const [createMatchResult, setCreateMatchResult] = useState(null);
+  const [isCreatingMatch, setIsCreatingMatch] = useState(false);
   const [type, setType] = useState("GOAL");
   const [customType, setCustomType] = useState("");
   const [teamId, setTeamId] = useState("");
@@ -49,11 +56,14 @@ function AdminContent() {
 
   const selectedMatch = matches.find((match) => match.id === matchId);
 
+  const loadMatches = useCallback(() => getMatches().then(setMatches), []);
+
   useEffect(() => {
     Promise.all([getMatches(), getCatalogTeams()])
       .then(([matchesResult, teamsResult]) => {
         setMatches(matchesResult);
         if (matchesResult.length > 0) setMatchId(matchesResult[0].id);
+        setCatalogTeams(teamsResult);
         const names = {};
         for (const team of teamsResult) names[team.id] = team.name;
         setTeamNames(names);
@@ -107,6 +117,26 @@ function AdminContent() {
     }));
   }, [selectedMatch, teamNames]);
 
+  async function handleCreateMatch(event) {
+    event.preventDefault();
+    setCreateMatchError(null);
+    setCreateMatchResult(null);
+    setIsCreatingMatch(true);
+    try {
+      const created = await createMatch({ homeTeamId: newHomeTeamId, awayTeamId: newAwayTeamId });
+      await loadMatches();
+      setMatchId(created.id);
+      setMatchQuery("");
+      setCreateMatchResult(matchLabel(created));
+      setNewHomeTeamId("");
+      setNewAwayTeamId("");
+    } catch (err) {
+      setCreateMatchError(err.message);
+    } finally {
+      setIsCreatingMatch(false);
+    }
+  }
+
   // Qué campos pide cada tipo (contrato T-01, sección 3.1). "Otro" es solo de la UI:
   // se manda como texto libre en el campo type.
   const isCustom = type === CUSTOM_TYPE;
@@ -142,8 +172,56 @@ function AdminContent() {
     }
   }
 
+  const canCreateMatch = newHomeTeamId && newAwayTeamId && newHomeTeamId !== newAwayTeamId;
+
   return (
     <AppLayout title="Panel de administrador">
+      <section className={styles.section}>
+        <h2 className={styles.sectionTitle}>Crear partido</h2>
+        <form onSubmit={handleCreateMatch} className={styles.form}>
+          <div className={styles.field}>
+            <label htmlFor="newHomeTeamId">Equipo local</label>
+            <select
+              id="newHomeTeamId"
+              value={newHomeTeamId}
+              onChange={(e) => setNewHomeTeamId(e.target.value)}
+              required
+            >
+              <option value="">Elegir…</option>
+              {catalogTeams.map((team) => (
+                <option key={team.id} value={team.id}>
+                  {team.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className={styles.field}>
+            <label htmlFor="newAwayTeamId">Equipo visitante</label>
+            <select
+              id="newAwayTeamId"
+              value={newAwayTeamId}
+              onChange={(e) => setNewAwayTeamId(e.target.value)}
+              required
+            >
+              <option value="">Elegir…</option>
+              {catalogTeams.map((team) => (
+                <option key={team.id} value={team.id}>
+                  {team.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <button type="submit" className={styles.submit} disabled={isCreatingMatch || !canCreateMatch}>
+            {isCreatingMatch ? "Creando…" : "Crear partido"}
+          </button>
+        </form>
+
+        {createMatchError && <p className={styles.error}>{createMatchError}</p>}
+        {createMatchResult && <p className={styles.success}>Partido creado: {createMatchResult}</p>}
+      </section>
+
       <section className={styles.section}>
         <h2 className={styles.sectionTitle}>Simular evento</h2>
         <form onSubmit={handleSubmit} className={styles.form}>

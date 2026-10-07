@@ -10,15 +10,15 @@ import java.util.Optional;
 
 public interface SubscriptionRepository extends JpaRepository<Subscription, Long> {
 
-    Optional<Subscription> findByFanIdAndTeamId(Long fanId, String teamId);
+    Optional<Subscription> findByFanIdAndTeamId(Long fanId, Long teamId);
 
-    boolean existsByFanIdAndTeamId(Long fanId, String teamId);
+    boolean existsByFanIdAndTeamId(Long fanId, Long teamId);
 
-    void deleteByFanIdAndTeamId(Long fanId, String teamId);
+    void deleteByFanIdAndTeamId(Long fanId, Long teamId);
 
     @Query("SELECT s FROM Subscription s JOIN FETCH s.team t JOIN FETCH t.league l WHERE s.fan.id = :fanId")
     List<Subscription> findAllByFanIdWithTeamAndLeague(@Param("fanId") Long fanId);
 
     @Query("SELECT s FROM Subscription s JOIN FETCH s.fan WHERE s.team.id = :teamId")
-    List<Subscription> findAllByTeamIdWithFan(@Param("teamId") String teamId);
+    List<Subscription> findAllByTeamIdWithFan(@Param("teamId") Long teamId);
 }

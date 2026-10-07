@@ -27,7 +27,7 @@ Dos colecciones (`matches` y `match_events`), sin relación declarada entre ella
 
 ## 3. `teamId` como string, sin catálogo propio (D-1)
 
-Por la decisión D-1, el catálogo de ligas y equipos (`League`, `Team`) vive en `fan-identity-service`/PostgreSQL, no acá. `match-ingestion-service` guarda `teamId` como un string plano (`"team-colon"`) sin validarlo contra ningún catálogo — es el mismo valor que usa el `Team.id` de fan-identity y el que viaja en los eventos de Kafka, pero la relación es una convención entre servicios, no una FK.
+Por la decisión D-1, el catálogo de ligas y equipos (`League`, `Team`) vive en `fan-identity-service`/PostgreSQL, no acá. `match-ingestion-service` guarda `teamId` como un string plano (`"1"`, el `Team.id` numérico de fan-identity convertido a texto — T-77) sin validarlo contra ningún catálogo — es el mismo valor que viaja en los eventos de Kafka, pero la relación es una convención entre servicios, no una FK.
 
 Esto es una **referencia débil entre microservicios**, normal en una arquitectura donde cada servicio es dueño de sus propios datos: `match-ingestion-service` no llama a `fan-identity-service` para validar que un `teamId` exista, porque eso acoplaría un microservicio de solo-lectura-de-eventos a la disponibilidad de otro, por una validación que no es crítica (T-21 solo valida que el equipo juegue *ese* partido según su propia base, no que exista en el catálogo global).
 

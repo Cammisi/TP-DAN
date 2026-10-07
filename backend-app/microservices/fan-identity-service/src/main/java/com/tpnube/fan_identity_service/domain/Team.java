@@ -2,6 +2,8 @@ package com.tpnube.fan_identity_service.domain;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
@@ -19,10 +21,11 @@ import lombok.Setter;
 @AllArgsConstructor
 public class Team {
 
-    // El id es el mismo teamId que viaja en los eventos de Kafka
-    // y que guarda match-ingestion-service en Mongo (ej. "team-colon").
+    // Numérico autogenerado (T-77), igual que Fan/Subscription/Notification. El teamId
+    // que viaja en Kafka/Mongo es la versión String de este id (ej. "4"), no el id en sí.
     @Id
-    private String id;
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
 
     @Column(nullable = false)
     private String name;

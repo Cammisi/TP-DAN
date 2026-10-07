@@ -7,7 +7,10 @@ import org.springframework.data.repository.query.Param;
 
 import java.util.List;
 
-public interface TeamRepository extends JpaRepository<Team, String> {
+public interface TeamRepository extends JpaRepository<Team, Long> {
+
+    // Para la siembra idempotente: el id ya no es manual, así que se chequea por nombre (T-77).
+    boolean existsByName(String name);
 
     // El CAST de :name a string es necesario: Postgres no puede inferir el tipo
     // de un parámetro null dentro de LOWER(CONCAT(...)) y falla con

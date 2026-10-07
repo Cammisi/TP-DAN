@@ -33,7 +33,7 @@ public class CatalogService {
         return teamRepository.search(name, leagueId)
                 .stream()
                 .map(team -> new TeamCatalogDTO(
-                        team.getId(),
+                        String.valueOf(team.getId()),
                         team.getName(),
                         team.getLeague().getId(),
                         team.getLeague().getName()

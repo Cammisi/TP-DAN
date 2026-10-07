@@ -35,21 +35,23 @@ public class DataSeeder implements ApplicationRunner {
         log.info("Datos semilla cargados correctamente");
     }
 
+    // Ids numéricos (T-77): mismos valores que genera el DataSeeder de fan-identity-service
+    // sembrando en ese mismo orden (Colón, Unión, River, Boca, Racing, Liverpool, Man City).
     private void seedMatches() {
-        saveMatchIfAbsent("match-001", "team-colon", "team-union", MatchStatus.LIVE,
+        saveMatchIfAbsent("match-001", "1", "2", MatchStatus.LIVE,
                 Instant.parse("2026-09-26T19:00:00Z"), 0, 0);
-        saveMatchIfAbsent("match-002", "team-river", "team-boca", MatchStatus.SCHEDULED,
+        saveMatchIfAbsent("match-002", "3", "4", MatchStatus.SCHEDULED,
                 Instant.parse("2026-10-04T20:00:00Z"), null, null);
-        saveMatchIfAbsent("match-003", "team-liverpool", "team-manchester-city", MatchStatus.FINISHED,
+        saveMatchIfAbsent("match-003", "6", "7", MatchStatus.FINISHED,
                 Instant.parse("2026-09-20T14:00:00Z"), 1, 0);
     }
 
     private void seedEvents() {
         // Ids fijos para poder chequear la idempotencia con existsById.
-        saveEventIfAbsent("seed-evt-001", "match-003", "team-liverpool", EventType.GOAL, 34,
+        saveEventIfAbsent("seed-evt-001", "match-003", "6", EventType.GOAL, 34,
                 "Gol de Liverpool", Instant.parse("2026-09-20T14:34:00Z"),
                 "Mohamed Salah", null, 1, 0);
-        saveEventIfAbsent("seed-evt-002", "match-003", "team-manchester-city", EventType.CARD, 60,
+        saveEventIfAbsent("seed-evt-002", "match-003", "7", EventType.CARD, 60,
                 "Expulsión en Manchester City", Instant.parse("2026-09-20T15:00:00Z"),
                 "Rodri", CardType.RED, null, null);
         saveEventIfAbsent("seed-evt-003", "match-003", null, EventType.MATCH_END, 90,

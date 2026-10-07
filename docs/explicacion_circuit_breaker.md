@@ -66,11 +66,11 @@ El reintento automático de esos eventos no despachados **no** está implementad
 
 ## 5. Cómo demostrar la apertura del circuito
 
-Requiere el stack completo arriba y `fan1@quienjuega.com` suscripto a `team-colon` (ver `docs/plan_30_consumer_fan_out.md`, sección 4, pasos 1-2).
+Requiere el stack completo arriba y `fan1@quienjuega.com` suscripto a Colón (`teamId: "1"`, T-77 — ver `docs/plan_30_consumer_fan_out.md`, sección 4, pasos 1-2).
 
 1. `GET http://localhost:8080/api/alerts/status` → `circuitState: "CLOSED"`.
 2. `docker compose stop fan-identity-service`.
-3. Ingestar 6 eventos `GOAL` de `team-colon` en `match-001` (mismo curl que en T-21). Cada POST responde `201` igual: match-ingestion no depende de fan-identity.
+3. Ingestar 6 eventos `GOAL` de Colón (`teamId: "1"`) en `match-001` (mismo curl que en T-21). Cada POST responde `201` igual: match-ingestion no depende de fan-identity.
 4. En los logs de `alert-dispatcher-service`: los primeros fallos muestran "Falló la consulta de suscriptores..."; a partir del quinto, "Circuito abierto: no se consultó fan-identity...".
 5. `GET /api/alerts/status` → `circuitState: "OPEN"`, con los 6 eventos en `undispatchedEvents` y su motivo.
 6. `docker compose start fan-identity-service`, esperar a que aparezca `UP` en Eureka (`:8761`, unos 30-60 s) y a que pasen los 15 s de `waitDurationInOpenState`.

@@ -36,7 +36,7 @@ Content-Type: application/json
 
 @tokenFan = {{loginFan.response.body.$.token}}
 
-### 3. Buscar el equipo en el catálogo — 200, incluye "id":"team-colon"
+### 3. Buscar el equipo en el catálogo — 200, incluye "id":"1" (Colón, T-77: ids numéricos)
 # La búsqueda no ignora tildes: "colon" (sin tilde) no matchea "Colón", por eso
 # acá se usa el prefijo sin la "ó" en vez del nombre completo (ver R-12 en
 # planificacion_global.md).
@@ -49,7 +49,7 @@ Authorization: Bearer {{tokenFan}}
 Content-Type: application/json
 
 {
-  "teamId": "team-colon"
+  "teamId": "1"
 }
 
 ### 5. Ver mis suscripciones — 200, aparece Colón
@@ -80,7 +80,7 @@ Content-Type: application/json
 
 {
   "matchId": "match-001",
-  "teamId": "team-colon",
+  "teamId": "1",
   "type": "GOAL",
   "minute": 78,
   "description": "Gol de Colón",
@@ -102,7 +102,7 @@ GET {{gateway}}/api/alerts/status
 Authorization: Bearer {{tokenAdmin}}
 
 ### 11. El partido quedó actualizado — match-001 en LIVE, marcador 1-0
-GET {{gateway}}/api/matches?teamId=team-colon
+GET {{gateway}}/api/matches?teamId=1
 Authorization: Bearer {{tokenAdmin}}
 
 ### --- Chequeos de seguridad (T-40/T-41) sobre el mismo stack ---
@@ -121,7 +121,7 @@ Content-Type: application/json
 
 {
   "matchId": "match-001",
-  "teamId": "team-colon",
+  "teamId": "1",
   "type": "GOAL",
   "minute": 10,
   "playerName": "Nadie",
@@ -130,7 +130,7 @@ Content-Type: application/json
 }
 
 ### 15. Endpoint interno, inalcanzable desde el host — 401 (el gateway exige token) o 404 (ruta no declarada)
-GET {{gateway}}/internal/fans/subscribers/team-colon
+GET {{gateway}}/internal/fans/subscribers/1
 
 ### 16. Registro con el mismo email — 409 EMAIL_ALREADY_EXISTS
 POST {{gateway}}/api/fans/auth/register

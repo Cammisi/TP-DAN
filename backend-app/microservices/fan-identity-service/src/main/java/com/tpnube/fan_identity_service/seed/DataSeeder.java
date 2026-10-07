@@ -51,13 +51,15 @@ public class DataSeeder implements ApplicationRunner {
         League ligaProfesional = leagueRepository.findById("liga-profesional").orElseThrow();
         League premierLeague = leagueRepository.findById("premier-league").orElseThrow();
 
-        saveTeamIfAbsent("team-colon", "Colón", ligaProfesional);
-        saveTeamIfAbsent("team-union", "Unión", ligaProfesional);
-        saveTeamIfAbsent("team-river", "River Plate", ligaProfesional);
-        saveTeamIfAbsent("team-boca", "Boca Juniors", ligaProfesional);
-        saveTeamIfAbsent("team-racing", "Racing Club", ligaProfesional);
-        saveTeamIfAbsent("team-liverpool", "Liverpool FC", premierLeague);
-        saveTeamIfAbsent("team-manchester-city", "Manchester City", premierLeague);
+        // Orden fijo: con la base recién creada, esto deja los ids 1..7 en este mismo orden
+        // (T-77). match-ingestion-service los referencia tal cual en sus partidos semilla.
+        saveTeamIfAbsent("Colón", ligaProfesional);
+        saveTeamIfAbsent("Unión", ligaProfesional);
+        saveTeamIfAbsent("River Plate", ligaProfesional);
+        saveTeamIfAbsent("Boca Juniors", ligaProfesional);
+        saveTeamIfAbsent("Racing Club", ligaProfesional);
+        saveTeamIfAbsent("Liverpool FC", premierLeague);
+        saveTeamIfAbsent("Manchester City", premierLeague);
     }
 
     private void seedFans() {
@@ -76,11 +78,12 @@ public class DataSeeder implements ApplicationRunner {
         log.info("Liga sembrada: {}", name);
     }
 
-    private void saveTeamIfAbsent(String id, String name, League league) {
-        if (teamRepository.existsById(id)) {
+    // Idempotente por nombre, no por id: el id ahora lo genera la base (T-77).
+    private void saveTeamIfAbsent(String name, League league) {
+        if (teamRepository.existsByName(name)) {
             return;
         }
-        teamRepository.save(new Team(id, name, league));
+        teamRepository.save(new Team(null, name, league));
         log.info("Equipo sembrado: {} ({})", name, league.getName());
     }
 

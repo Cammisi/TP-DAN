@@ -1,5 +1,6 @@
 package com.tpnube.match_ingestion_service.controller;
 
+import com.tpnube.match_ingestion_service.dto.CreateMatchRequestDTO;
 import com.tpnube.match_ingestion_service.dto.EventCreatedDTO;
 import com.tpnube.match_ingestion_service.dto.MatchDTO;
 import com.tpnube.match_ingestion_service.dto.MatchEventDTO;
@@ -32,6 +33,13 @@ public class MatchController {
     @GetMapping
     public ResponseEntity<List<MatchDTO>> getMatches(@RequestParam(required = false) String teamId) {
         return ResponseEntity.ok(matchService.getMatches(teamId));
+    }
+
+    // Admin-only: lo exige el gateway (cualquier no-GET bajo /api/matches/**, ver JwtValidationFilter).
+    @PostMapping
+    public ResponseEntity<MatchDTO> createMatch(@RequestBody CreateMatchRequestDTO request) {
+        MatchDTO match = matchService.createMatch(request);
+        return ResponseEntity.status(HttpStatus.CREATED).body(match);
     }
 
     @GetMapping("/{matchId}/events")

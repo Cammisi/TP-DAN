@@ -108,7 +108,7 @@ Todas operan siempre sobre el fan del JWT (nunca sobre un id del body/path).
 **GET /api/catalog/teams?name=&leagueId=**
 - Ambos query params opcionales, se combinan con AND si están los dos.
 - 200: `[{ "id": string, "name": string, "leagueId": string, "leagueName": string }]`
-- El `id` es el mismo `teamId` que acepta `POST /api/fans/subscriptions` y que usa `match-ingestion-service` como string.
+- El `id` es el mismo `teamId` que acepta `POST /api/fans/subscriptions` y que usa `match-ingestion-service` como string — numérico (`"4"`), no un slug (T-77).
 
 ### 2.5 Suscriptores por equipo (interno, consume alert-dispatcher)
 
@@ -129,6 +129,7 @@ Todos bajo `/api/matches/**`.
 | Método | Path | Auth |
 |---|---|---|
 | GET | `/api/matches` | fan/admin |
+| POST | `/api/matches` | admin |
 | GET | `/api/matches/{matchId}/events` | fan/admin |
 | POST | `/api/matches/{matchId}/events` | admin |
 
@@ -136,6 +137,12 @@ Todos bajo `/api/matches/**`.
 - `teamId` opcional, filtra partidos donde participe ese equipo.
 - 200: `[{ "id": string, "homeTeamId": string, "awayTeamId": string, "status": "SCHEDULED"|"LIVE"|"FINISHED", "scheduledAt": ISO-8601, "homeScore": int|null, "awayScore": int|null }]`
 - No incluye nombres de equipo (match-ingestion no tiene catálogo, D-1): el frontend cruza `homeTeamId`/`awayTeamId` contra `/api/catalog/teams`.
+
+**POST /api/matches** — crear partido (T-76, lo usa el admin para habilitar equipos sin partido semilla)
+- Request: `{ "homeTeamId": string, "awayTeamId": string, "scheduledAt": ISO-8601|null }`. `scheduledAt` opcional (default: ahora).
+- 201: igual forma que un item de `GET /api/matches`, con `status: "SCHEDULED"` y los marcadores en `null`.
+- 400 `INVALID_MATCH` si falta `homeTeamId`/`awayTeamId` o son el mismo equipo.
+- **No** valida los `teamId` contra el catálogo (D-1, mismo criterio que la ingesta de eventos): la UI de admin ya restringe la elección al catálogo.
 
 **GET /api/matches/{matchId}/events**
 - 200: `[MatchEventDTO]` (ver 3.1), ordenados cronológicamente.
@@ -176,7 +183,7 @@ Ejemplo (gol):
 {
   "eventId": "evt-8f21",
   "matchId": "match-001",
-  "teamId": "team-colon",
+  "teamId": "1",
   "type": "GOAL",
   "minute": 78,
   "description": "Gol de Colón",
@@ -220,7 +227,7 @@ Solo expone el estado del despachador para el panel de admin; el historial del f
 - **Decisión de diseño — `MATCH_END` involucra dos equipos:** como la clave es un único `teamId` y `alert-dispatcher-service` resuelve suscriptores por equipo, `match-ingestion-service` publica **un mensaje por equipo participante** cuando el evento es `MATCH_END` (mismo `eventId`, dos mensajes con `teamId` distinto). Para `GOAL` y `CARD` se publica un solo mensaje, con el `teamId` al que pertenece el evento. Así el consumer de alert-dispatcher no necesita casos especiales por tipo de evento.
 - **Resiliencia de la publicación (T-23):** si Kafka está caído, el evento ya fue persistido en Mongo antes de intentar publicar; el fallo de publicación se loguea pero no revierte la persistencia ni falla el POST.
 
-Ejemplo de mensaje (mismo evento de gol de 3.1): `value` = el DTO de arriba, `key` = `"team-colon"`.
+Ejemplo de mensaje (mismo evento de gol de 3.1): `value` = el DTO de arriba, `key` = `"1"`.
 
 ## 6. Prefijo de endpoints internos
 

@@ -37,14 +37,15 @@ public class SubscriptionService {
         if (teamId == null || teamId.isBlank()) {
             throw new InvalidRequestException("El teamId es obligatorio");
         }
+        Long id = parseTeamId(teamId);
 
-        Team team = teamRepository.findById(teamId)
+        Team team = teamRepository.findById(id)
                 .orElseThrow(() -> new TeamNotFoundException(teamId));
 
-        Optional<Subscription> existing = subscriptionRepository.findByFanIdAndTeamId(fanId, teamId);
+        Optional<Subscription> existing = subscriptionRepository.findByFanIdAndTeamId(fanId, id);
         if (existing.isPresent()) {
             SubscriptionResponseDTO dto = new SubscriptionResponseDTO(
-                    team.getId(),
+                    String.valueOf(team.getId()),
                     team.getName(),
                     team.getLeague().getName()
             );
@@ -56,7 +57,7 @@ public class SubscriptionService {
         subscriptionRepository.save(subscription);
 
         SubscriptionResponseDTO dto = new SubscriptionResponseDTO(
-                team.getId(),
+                String.valueOf(team.getId()),
                 team.getName(),
                 team.getLeague().getName()
         );
@@ -65,7 +66,7 @@ public class SubscriptionService {
 
     @Transactional
     public void unsubscribe(Long fanId, String teamId) {
-        subscriptionRepository.deleteByFanIdAndTeamId(fanId, teamId);
+        subscriptionRepository.deleteByFanIdAndTeamId(fanId, parseTeamId(teamId));
     }
 
     @Transactional(readOnly = true)
@@ -73,7 +74,7 @@ public class SubscriptionService {
         return subscriptionRepository.findAllByFanIdWithTeamAndLeague(fanId)
                 .stream()
                 .map(sub -> new SubscriptionItemDTO(
-                        sub.getTeam().getId(),
+                        String.valueOf(sub.getTeam().getId()),
                         sub.getTeam().getName(),
                         sub.getTeam().getLeague().getId(),
                         sub.getTeam().getLeague().getName()
@@ -83,13 +84,28 @@ public class SubscriptionService {
 
     @Transactional(readOnly = true)
     public List<SubscriberDTO> getSubscribers(String teamId) {
-        return subscriptionRepository.findAllByTeamIdWithFan(teamId)
+        Long id;
+        try {
+            id = Long.parseLong(teamId);
+        } catch (NumberFormatException e) {
+            return List.of(); // teamId no es uno real del catálogo: sin suscriptos.
+        }
+        return subscriptionRepository.findAllByTeamIdWithFan(id)
                 .stream()
                 .map(sub -> new SubscriberDTO(
                         sub.getFan().getId().toString(),
                         sub.getFan().getEmail()
                 ))
                 .toList();
+    }
+
+    // Un teamId no numérico es, para quien pregunta, un equipo que no existe.
+    private Long parseTeamId(String teamId) {
+        try {
+            return Long.parseLong(teamId);
+        } catch (NumberFormatException e) {
+            throw new TeamNotFoundException(teamId);
+        }
     }
 
     public static class TeamNotFoundException extends RuntimeException {

@@ -116,6 +116,10 @@ export function ingestMatchEvent(matchId, event) {
   });
 }
 
+export function createMatch(match) {
+  return apiFetch("/api/matches", { method: "POST", body: match });
+}
+
 // --- Estado del despachador (admin) ---
 export function getAlertsStatus() {
   return apiFetch("/api/alerts/status");

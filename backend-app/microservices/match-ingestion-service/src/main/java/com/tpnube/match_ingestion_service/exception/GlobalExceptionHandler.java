@@ -2,6 +2,7 @@ package com.tpnube.match_ingestion_service.exception;
 
 import com.tpnube.match_ingestion_service.dto.ErrorResponseDTO;
 import com.tpnube.match_ingestion_service.service.MatchEventService;
+import com.tpnube.match_ingestion_service.service.MatchService;
 import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -28,6 +29,12 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ErrorResponseDTO> handleMatchNotFound(
             MatchEventService.MatchNotFoundException ex, HttpServletRequest request) {
         return buildError(HttpStatus.NOT_FOUND, "MATCH_NOT_FOUND", ex.getMessage(), request);
+    }
+
+    @ExceptionHandler(MatchService.InvalidMatchException.class)
+    public ResponseEntity<ErrorResponseDTO> handleInvalidMatch(
+            MatchService.InvalidMatchException ex, HttpServletRequest request) {
+        return buildError(HttpStatus.BAD_REQUEST, "INVALID_MATCH", ex.getMessage(), request);
     }
 
     // JSON malformado o con tipos incorrectos (ej. "minute": "abc") es INVALID_EVENT también.

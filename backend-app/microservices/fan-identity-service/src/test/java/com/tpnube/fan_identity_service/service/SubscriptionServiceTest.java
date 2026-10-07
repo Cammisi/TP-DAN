@@ -37,7 +37,7 @@ class SubscriptionServiceTest {
     private SubscriptionService subscriptionService;
 
     private final League league = new League("liga-profesional", "Liga Profesional de Fútbol");
-    private final Team team = new Team("team-colon", "Colón", league);
+    private final Team team = new Team(1L, "Colón", league);
 
     @BeforeEach
     void setUp() {
@@ -46,12 +46,12 @@ class SubscriptionServiceTest {
 
     @Test
     void seguirElMismoEquipoDosVecesNoDuplicaLaSuscripcion() {
-        when(teamRepository.findById("team-colon")).thenReturn(Optional.of(team));
+        when(teamRepository.findById(1L)).thenReturn(Optional.of(team));
         Fan fan = new Fan(1L, "fan@quienjuega.com", "hash", null);
-        when(subscriptionRepository.findByFanIdAndTeamId(1L, "team-colon"))
+        when(subscriptionRepository.findByFanIdAndTeamId(1L, 1L))
                 .thenReturn(Optional.of(new Subscription(10L, fan, team)));
 
-        SubscriptionService.SubscriptionResult result = subscriptionService.subscribe(1L, "team-colon");
+        SubscriptionService.SubscriptionResult result = subscriptionService.subscribe(1L, "1");
 
         assertThat(result.isNew()).isFalse();
         verify(subscriptionRepository, never()).save(any());
@@ -59,11 +59,11 @@ class SubscriptionServiceTest {
 
     @Test
     void seguirUnEquipoNuevoCreaLaSuscripcion() {
-        when(teamRepository.findById("team-colon")).thenReturn(Optional.of(team));
-        when(subscriptionRepository.findByFanIdAndTeamId(1L, "team-colon")).thenReturn(Optional.empty());
+        when(teamRepository.findById(1L)).thenReturn(Optional.of(team));
+        when(subscriptionRepository.findByFanIdAndTeamId(1L, 1L)).thenReturn(Optional.empty());
         when(fanRepository.getReferenceById(1L)).thenReturn(new Fan(1L, "fan@quienjuega.com", "hash", null));
 
-        SubscriptionService.SubscriptionResult result = subscriptionService.subscribe(1L, "team-colon");
+        SubscriptionService.SubscriptionResult result = subscriptionService.subscribe(1L, "1");
 
         assertThat(result.isNew()).isTrue();
         verify(subscriptionRepository).save(any(Subscription.class));
@@ -71,10 +71,18 @@ class SubscriptionServiceTest {
 
     @Test
     void seguirUnEquipoInexistenteRechaza() {
-        when(teamRepository.findById("team-fantasma")).thenReturn(Optional.empty());
+        when(teamRepository.findById(99L)).thenReturn(Optional.empty());
 
+        assertThatThrownBy(() -> subscriptionService.subscribe(1L, "99"))
+                .isInstanceOf(SubscriptionService.TeamNotFoundException.class);
+        verify(subscriptionRepository, never()).save(any());
+    }
+
+    @Test
+    void seguirUnTeamIdNoNumericoRechazaSinConsultarElRepositorio() {
         assertThatThrownBy(() -> subscriptionService.subscribe(1L, "team-fantasma"))
                 .isInstanceOf(SubscriptionService.TeamNotFoundException.class);
+        verify(teamRepository, never()).findById(any());
         verify(subscriptionRepository, never()).save(any());
     }
 }

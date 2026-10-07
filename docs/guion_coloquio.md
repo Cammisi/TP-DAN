@@ -35,7 +35,7 @@ curl -i http://localhost:8080/api/fans/subscriptions                          # 
 curl -i http://localhost:8080/api/fans/subscriptions -H "Authorization: Bearer token-trucho"  # 401, firma inválida
 # Con el token de un fan (no admin):
 curl -i -X POST http://localhost:8080/api/matches/match-001/events -H "Authorization: Bearer $TOKEN_FAN" -d '{}'  # 403
-curl -i http://localhost:8080/internal/fans/subscribers/team-colon            # 401 — ni con token llega: no hay ruta
+curl -i http://localhost:8080/internal/fans/subscribers/1                     # 401 — ni con token llega: no hay ruta
 ```
 
 Requisito: **"Implementar seguridad."** Un párrafo de más: JWT validado en dos lugares (gateway y fan-identity, por qué cada uno — `docs/explicacion_seguridad.md`), endpoints internos con clave compartida (`X-Internal-Api-Key`).
