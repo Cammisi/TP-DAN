@@ -210,6 +210,8 @@ function AdminContent() {
       const result = await ingestMatchEvent(matchId, dto);
       setSubmitResult(result.eventId);
       loadStatus();
+      // El evento cambia el status y el marcador del partido, que se muestran en el selector.
+      await loadMatches();
     } catch (err) {
       setSubmitError(err.message);
     } finally {

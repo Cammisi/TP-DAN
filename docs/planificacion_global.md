@@ -104,6 +104,7 @@ Huecos que ni el enunciado ni la resolución propuesta resolvían. **Las seis es
 - [ ] **R-14 · Si el consumer arranca antes que el productor, `match-events` se crea con 1 partición y los primeros eventos tardan hasta 5 minutos.** Detectado el 2026-10-01 verificando R-13 con volúmenes limpios: `alert-dispatcher-service` se suscribió a `match-events` antes de que `match-ingestion-service` lo declarara, y el broker lo auto-creó con su default de 1 partición. Después el `NewTopic` de `KafkaTopicConfig` lo amplió a 3, pero el consumer siguió con solo `match-events-0` asignada hasta refrescar su metadata (`metadata.max.age.ms`, 5 minutos por defecto): un `MATCH_END` publicado en las particiones 1 y 2 a las 21:14:48 recién se procesó a las 21:17:57. No se pierde nada (el consumer usa `auto-offset-reset: earliest`), pero en una demo parece que la alerta no llega. Probablemente explica parte de la demora de R-11, y contradice `explicacion_mensajeria_kafka.md`, que da por hecho que el tópico siempre lo crea el `NewTopic`. Opción más simple: declarar el mismo `NewTopic` también en `alert-dispatcher-service`, así el tópico existe con 3 particiones antes de que arranque el listener, levante primero el servicio que levante. **Para el coloquio, hasta resolverlo:** después de un `up` con Kafka recreado (ver R-15), esperar ~5 minutos o mandar un evento de prueba antes de la demo. Se resuelve en T-74.
 - [ ] **R-15 · El volumen `kafka-data` no guarda nada: Kafka pierde tópicos, mensajes y offsets en cada `docker compose down`.** Detectado el 2026-10-01: el compose monta `kafka-data` en `/var/lib/kafka/data`, pero el broker escribe en `/tmp/kafka-logs` (el default de Kafka, porque el compose no setea `KAFKA_LOG_DIRS`). Verificado con `ls` dentro del contenedor: `/var/lib/kafka/data` vacío y `/tmp/kafka-logs` con `match-events-*` y `__consumer_offsets-*`. `restart` y `stop` no lo muestran porque el filesystem del contenedor sobrevive, pero `down` lo borra. Contradice la tabla de volúmenes de `explicacion_docker_compose.md` ("los mensajes del sistema de mensajería Kafka") y hace que R-14 se repita en cada `up` posterior a un `down`, no solo la primera vez. Opción más simple: `KAFKA_LOG_DIRS: /var/lib/kafka/data` en el servicio `kafka` del compose. Se resuelve en T-74.
 - [x] **R-16 · El timeout de 3 s del TimeLimiter del Circuit Breaker se ignora en silencio: el efectivo es 1 s.** Detectado el 2026-10-08: con el stack recién levantado, un `GOAL` de Boca (`teamId: "4"`) quedó en `undispatchedEvents` por "TimeLimiter 'fanIdentityService' recorded a timeout exception", y Prometheus midió esa llamada fallida en 1,14 s (`resilience4j_circuitbreaker_calls_seconds_max{kind="failed"}`), no en 3 s. Causa, verificada en el bytecode de `spring-cloud-circuitbreaker-resilience4j-5.0.2`: `Resilience4JCircuitBreakerFactory.create` toma la config del CircuitBreaker del `Customizer`, pero la del TimeLimiter la busca solo en el `TimeLimiterRegistry` (por id, y si no hay, el default del registro: 1 s), así que el `.timeLimiterConfig(...)` de `CircuitBreakerConfiguration` no tiene efecto. Mismo patrón que R-10: config que no da error y no se aplica. Contradice la tabla de `explicacion_circuit_breaker.md` y hace más probable R-11, porque la primera llamada en frío a fan-identity supera 1 s con facilidad (en caliente, medida a mano desde el contenedor del despachador, tardó 0,73 s). Opción más simple, a verificar: declarar el timeout por YAML (`resilience4j.timelimiter.instances.fanIdentityService.timeout-duration: 3s`), sacar el `.timeLimiterConfig(...)` que no se usa y cubrirlo con un test que lea el `TimeLimiterRegistry`, como el de Feign de T-41. **Corregido en T-78**: el timeout pasó al YAML y lo cubre un test con una llamada de 1,5 s por el circuito real.
+- [x] **R-17 · `/admin` no refresca el estado del partido después de cargar un evento.** Detectado el 2026-10-08: un partido creado como `SCHEDULED` se sigue mostrando `(SCHEDULED)` en el selector de `/admin` después de cargarle goles, aunque en Mongo ya está `LIVE` (verificado con el partido `6ac7cad6…` y con `match-002`, ambos con 2 goles y en `LIVE`). El backend está bien: `MatchEventService.applyToMatch` pasa el partido a `LIVE` con cualquier evento y a `FINISHED` con `MATCH_END`. La causa está en `handleSubmit` de `pages/admin.js`: recarga el estado del despachador (`loadStatus`) pero no la lista de partidos (`loadMatches`), que solo se pide al abrir la página y al crear un partido. Recargando la página se ve el estado real. Opción más simple: llamar también a `loadMatches()` después de ingestar el evento. **Corregido en T-79** con esa misma opción.
 
 ---
 
@@ -559,6 +560,16 @@ La Fase 0 y la Fase 2 se hacen **juntos**: definen contratos y tocan puntos de i
     - [x] En Docker, una consulta de suscriptores que tarda más de 1 s se despacha en vez de caer al fallback. *Verificado 2026-10-08 pausando `fan-identity-service` (`docker pause`) durante la ingesta de un `GOAL` de Colón en `match-001`: la consulta tardó 1,67 s y el evento quedó en `lastProcessedEvents`. Con una pausa más larga, el corte llegó a los 3,005 s (antes del arreglo, a los 1,14 s).*
   - **Terminada cuando:** `mvn test` en verde y, con el stack levantado, un evento cuya consulta de suscriptores tarda más de 1 s llega como despachado. *Verificado: `mvn test` 10/10 en verde (`maven:3.9-eclipse-temurin-25`) y la prueba en Docker de arriba.*
 
+- [x] **T-79 · `/admin` muestra el estado actualizado del partido** — `frontend-app/pages/admin.js` · depende de: T-65, T-76 · carril C
+  - **Qué:** después de cargar un evento, el selector de partidos de `/admin` muestra el status y el marcador nuevos sin recargar la página.
+  - **Por qué:** resuelve R-17. Hoy un partido recién creado sigue diciendo `(SCHEDULED)` después de cargarle goles, aunque ya está `LIVE`. Pedida el 2026-10-08 sin `plan_*` aparte, con aprobación explícita del integrante.
+  - **Afecta:** `handleSubmit` de `pages/admin.js`.
+  - **Decisiones tomadas:** se mantiene el paso automático a `LIVE` con el primer evento (`MatchEventService.applyToMatch`). Se evaluó un tipo `MATCH_START` explícito y se descartó por ahora: no arregla esta pantalla y toca el contrato, dos servicios y el frontend.
+  - **Requisitos:**
+    - [x] `handleSubmit` recarga la lista de partidos después de ingestar el evento. *`next build` compila; el lint no suma warnings nuevos.*
+    - [x] Con el stack levantado, crear un partido y cargarle un gol en `/admin` cambia su etiqueta de `(SCHEDULED)` a `(LIVE)` sin recargar la página. *Verificado por el integrante en el navegador el 2026-10-08, después de recargar con Ctrl+F5: una pestaña abierta antes de reconstruir la imagen sigue corriendo el JavaScript viejo.*
+  - **Terminada cuando:** el segundo requisito se verifica en el navegador.
+
 ---
 
 ## 7. Resumen de avance
@@ -570,9 +581,9 @@ La Fase 0 y la Fase 2 se hacen **juntos**: definen contratos y tocan puntos de i
 | 2 — Integración y seguridad | 3 | 3 |
 | 3 — Requisitos transversales | 2 | 2 |
 | 4 — Frontend | 6 | 6 |
-| 5 — Cierre y entrega | 9 | 6 |
-| **Total** | **35** | **32** |
+| 5 — Cierre y entrega | 10 | 7 |
+| **Total** | **36** | **33** |
 
-> T-66 (Panel Principal) es una tarea **propuesta**, no forma parte del recuento de 32: se agrega a la tabla si el grupo decide tomarla.
+> T-66 (Panel Principal) es una tarea **propuesta**, no forma parte del recuento de 33: se agrega a la tabla si el grupo decide tomarla.
 
 Actualizar esta tabla al cerrar cada tarea.
