@@ -164,6 +164,7 @@ Toda la documentación vive en [docs/](docs/):
 | [explicacion_circuit_breaker.md](docs/explicacion_circuit_breaker.md) | Circuit Breaker (Resilience4J), cómo demostrar la apertura |
 | [explicacion_seguridad.md](docs/explicacion_seguridad.md) | JWT, validación en el gateway, roles, endpoints internos, CORS y secretos |
 | [explicacion_observabilidad.md](docs/explicacion_observabilidad.md) | Métricas (Prometheus/Grafana) y logs centralizados (Loki/Promtail), cómo demostrarlo |
+| [explicacion_como_observar.md](docs/explicacion_como_observar.md) | Guía práctica para ver el sistema funcionando: Eureka, Kafka UI, Grafana, Prometheus y consola |
 | [explicacion_frontend.md](docs/explicacion_frontend.md) | Arquitectura de `frontend-app`, capa de API/sesión, qué mockup quedó fuera de alcance |
 | [quien-juega.http](docs/quien-juega.http) | Colección de requests reproducible del flujo completo (ver **Cómo probar**) |
 
