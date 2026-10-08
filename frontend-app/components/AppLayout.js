@@ -14,8 +14,9 @@ export default function AppLayout({ title, children }) {
   const { session, logout } = useSession();
   const router = useRouter();
 
+  // El admin solo gestiona el panel de admin; Panel Principal/Suscripciones/Alertas son del fan.
   const navItems = session?.role === "ADMIN"
-    ? [...NAV_ITEMS, { href: "/admin", label: "Admin" }]
+    ? [{ href: "/admin", label: "Admin" }]
     : NAV_ITEMS;
 
   return (

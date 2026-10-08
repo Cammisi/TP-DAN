@@ -124,6 +124,10 @@ export function createCatalogTeam({ name, leagueId }) {
   return apiFetch("/api/catalog/teams", { method: "POST", body: { name, leagueId } });
 }
 
+export function createCatalogLeague({ name }) {
+  return apiFetch("/api/catalog/leagues", { method: "POST", body: { name } });
+}
+
 // --- Estado del despachador (admin) ---
 export function getAlertsStatus() {
   return apiFetch("/api/alerts/status");

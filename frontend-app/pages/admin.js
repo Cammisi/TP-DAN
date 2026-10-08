@@ -9,13 +9,15 @@ import {
   ingestMatchEvent,
   createMatch,
   createCatalogTeam,
+  createCatalogLeague,
   getAlertsStatus,
 } from "@/lib/api";
 import styles from "@/styles/Admin.module.css";
 
 const CUSTOM_TYPE = "CUSTOM";
-// Sentinel para "escribir un equipo nuevo" en vez de elegir uno del catálogo (T-76).
+// Sentinels para "escribir nuevo" en vez de elegir del catálogo (T-76), en equipo y en liga.
 const NEW_TEAM = "__NEW__";
+const NEW_LEAGUE = "__NEW__";
 
 const EVENT_TYPES = [
   { value: "MATCH_START", label: "Inicio del partido" },
@@ -47,9 +49,11 @@ function AdminContent() {
   const [newHomeTeamId, setNewHomeTeamId] = useState("");
   const [newHomeTeamName, setNewHomeTeamName] = useState("");
   const [newHomeLeagueId, setNewHomeLeagueId] = useState("");
+  const [newHomeLeagueName, setNewHomeLeagueName] = useState("");
   const [newAwayTeamId, setNewAwayTeamId] = useState("");
   const [newAwayTeamName, setNewAwayTeamName] = useState("");
   const [newAwayLeagueId, setNewAwayLeagueId] = useState("");
+  const [newAwayLeagueName, setNewAwayLeagueName] = useState("");
   const [createMatchError, setCreateMatchError] = useState(null);
   const [createMatchResult, setCreateMatchResult] = useState(null);
   const [isCreatingMatch, setIsCreatingMatch] = useState(false);
@@ -146,13 +150,21 @@ function AdminContent() {
     }));
   }, [selectedMatch, teamNames]);
 
-  // Si eligieron "Otro", primero hay que crear el equipo en el catálogo para tener su id
+  // Si eligieron "Otro" en la liga, primero hay que crearla para tener un leagueId real.
+  async function resolveLeagueId(selectedLeagueId, typedLeagueName) {
+    if (selectedLeagueId !== NEW_LEAGUE) return selectedLeagueId;
+    const league = await createCatalogLeague({ name: typedLeagueName.trim() });
+    return league.id;
+  }
+
+  // Si eligieron "Otro" en el equipo, primero hay que crearlo en el catálogo para tener su id
   // numérico (T-77) — match-ingestion no tiene catálogo propio (D-1), no puede crearlo él.
-  async function resolveTeam(selectedId, typedName, leagueId) {
+  async function resolveTeam(selectedId, typedName, leagueId, typedLeagueName) {
     if (selectedId !== NEW_TEAM) {
       return { id: selectedId, name: teamNames[selectedId] ?? selectedId };
     }
-    const team = await createCatalogTeam({ name: typedName.trim(), leagueId });
+    const resolvedLeagueId = await resolveLeagueId(leagueId, typedLeagueName);
+    const team = await createCatalogTeam({ name: typedName.trim(), leagueId: resolvedLeagueId });
     return { id: team.id, name: team.name };
   }
 
@@ -162,8 +174,8 @@ function AdminContent() {
     setCreateMatchResult(null);
     setIsCreatingMatch(true);
     try {
-      const home = await resolveTeam(newHomeTeamId, newHomeTeamName, newHomeLeagueId);
-      const away = await resolveTeam(newAwayTeamId, newAwayTeamName, newAwayLeagueId);
+      const home = await resolveTeam(newHomeTeamId, newHomeTeamName, newHomeLeagueId, newHomeLeagueName);
+      const away = await resolveTeam(newAwayTeamId, newAwayTeamName, newAwayLeagueId, newAwayLeagueName);
       if (home.id === away.id) {
         throw new Error("El equipo local y el visitante no pueden ser el mismo");
       }
@@ -174,8 +186,10 @@ function AdminContent() {
       setCreateMatchResult(`${home.name} vs ${away.name}`);
       setNewHomeTeamId("");
       setNewHomeTeamName("");
+      setNewHomeLeagueName("");
       setNewAwayTeamId("");
       setNewAwayTeamName("");
+      setNewAwayLeagueName("");
     } catch (err) {
       setCreateMatchError(err.message);
     } finally {
@@ -220,11 +234,15 @@ function AdminContent() {
     }
   }
 
-  // Si es "Otro", alcanza con el nombre tipeado; la liga siempre tiene un valor por default.
+  // Si es "Otro", alcanza con el nombre tipeado (y, si la liga también es "Otro", su nombre).
   // Si los dos lados son "Otro", no se puede comparar el id todavía (se crea al enviar):
   // ese caso lo valida handleCreateMatch después de resolver ambos equipos.
-  const homeTeamReady = newHomeTeamId === NEW_TEAM ? newHomeTeamName.trim() : newHomeTeamId;
-  const awayTeamReady = newAwayTeamId === NEW_TEAM ? newAwayTeamName.trim() : newAwayTeamId;
+  const homeLeagueReady = newHomeLeagueId === NEW_LEAGUE ? newHomeLeagueName.trim() : newHomeLeagueId;
+  const awayLeagueReady = newAwayLeagueId === NEW_LEAGUE ? newAwayLeagueName.trim() : newAwayLeagueId;
+  const homeTeamReady =
+    newHomeTeamId === NEW_TEAM ? newHomeTeamName.trim() && homeLeagueReady : newHomeTeamId;
+  const awayTeamReady =
+    newAwayTeamId === NEW_TEAM ? newAwayTeamName.trim() && awayLeagueReady : newAwayTeamId;
   const sameExistingTeam =
     newHomeTeamId !== NEW_TEAM && newAwayTeamId !== NEW_TEAM && newHomeTeamId === newAwayTeamId;
   const canCreateMatch = homeTeamReady && awayTeamReady && !sameExistingTeam;
@@ -278,8 +296,22 @@ function AdminContent() {
                       {league.name}
                     </option>
                   ))}
+                  <option value={NEW_LEAGUE}>Otro (escribir nombre)</option>
                 </select>
               </div>
+              {newHomeLeagueId === NEW_LEAGUE && (
+                <div className={styles.field}>
+                  <label htmlFor="newHomeLeagueName">Nombre de la liga local</label>
+                  <input
+                    id="newHomeLeagueName"
+                    type="text"
+                    placeholder="Ej: Ligue 1 Francia"
+                    required
+                    value={newHomeLeagueName}
+                    onChange={(e) => setNewHomeLeagueName(e.target.value)}
+                  />
+                </div>
+              )}
             </>
           )}
 
@@ -327,8 +359,22 @@ function AdminContent() {
                       {league.name}
                     </option>
                   ))}
+                  <option value={NEW_LEAGUE}>Otro (escribir nombre)</option>
                 </select>
               </div>
+              {newAwayLeagueId === NEW_LEAGUE && (
+                <div className={styles.field}>
+                  <label htmlFor="newAwayLeagueName">Nombre de la liga visitante</label>
+                  <input
+                    id="newAwayLeagueName"
+                    type="text"
+                    placeholder="Ej: Ligue 1 Francia"
+                    required
+                    value={newAwayLeagueName}
+                    onChange={(e) => setNewAwayLeagueName(e.target.value)}
+                  />
+                </div>
+              )}
             </>
           )}
 

@@ -102,11 +102,18 @@ Todas operan siempre sobre el fan del JWT (nunca sobre un id del body/path).
 | Método | Path | Auth |
 |---|---|---|
 | GET | `/api/catalog/leagues` | fan/admin |
+| POST | `/api/catalog/leagues` | admin |
 | GET | `/api/catalog/teams` | fan/admin |
 | POST | `/api/catalog/teams` | admin |
 
 **GET /api/catalog/leagues**
 - 200: `[{ "id": string, "name": string }]`
+
+**POST /api/catalog/leagues** — crear liga (T-76, lo usa el admin para "escribir" una liga nueva al escribir un equipo nuevo)
+- Request: `{ "name": string }`.
+- 201 (liga nueva) o 200 (ya existía una liga con ese `name`, se devuelve tal cual): mismo shape que un item de `GET /api/catalog/leagues`.
+- El `id` se genera a partir del `name` (slug, ej. "Ligue 1 Francia" → `"ligue-1-francia"`) — a diferencia de `Team` (T-77), `League.id` sigue siendo un slug manual, no numérico.
+- 400 `INVALID_REQUEST` si falta `name`.
 
 **GET /api/catalog/teams?name=&leagueId=**
 - Ambos query params opcionales, se combinan con AND si están los dos.
@@ -117,7 +124,7 @@ Todas operan siempre sobre el fan del JWT (nunca sobre un id del body/path).
 - Request: `{ "name": string, "leagueId": string }`.
 - 201 (equipo nuevo) o 200 (ya existía un equipo con ese `name`, se devuelve tal cual, no se duplica): mismo shape que un item de `GET /api/catalog/teams`.
 - 400 `INVALID_REQUEST` si falta `name` o `leagueId`. 404 `LEAGUE_NOT_FOUND` si `leagueId` no existe.
-- La búsqueda de duplicados es por nombre exacto (sensible a mayúsculas/tildes, mismo límite que R-12): "psg" y "PSG" crean dos equipos distintos.
+- La búsqueda de duplicados es por nombre exacto (sensible a mayúsculas/tildes, mismo límite que R-12): "psg" y "PSG" crean dos equipos distintos. Mismo criterio para `POST /api/catalog/leagues`.
 
 ### 2.5 Suscriptores por equipo (interno, consume alert-dispatcher)
 

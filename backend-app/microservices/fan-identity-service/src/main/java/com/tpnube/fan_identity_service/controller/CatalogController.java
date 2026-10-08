@@ -1,5 +1,6 @@
 package com.tpnube.fan_identity_service.controller;
 
+import com.tpnube.fan_identity_service.dto.CreateLeagueRequestDTO;
 import com.tpnube.fan_identity_service.dto.CreateTeamRequestDTO;
 import com.tpnube.fan_identity_service.dto.LeagueDTO;
 import com.tpnube.fan_identity_service.dto.TeamCatalogDTO;
@@ -28,6 +29,14 @@ public class CatalogController {
     @GetMapping("/leagues")
     public ResponseEntity<List<LeagueDTO>> getLeagues() {
         return ResponseEntity.ok(catalogService.getLeagues());
+    }
+
+    // Admin-only: lo exige el gateway (cualquier no-GET bajo /api/catalog/**, ver JwtValidationFilter).
+    @PostMapping("/leagues")
+    public ResponseEntity<LeagueDTO> createLeague(@RequestBody CreateLeagueRequestDTO request) {
+        CatalogService.LeagueResult result = catalogService.createLeague(request.name());
+        HttpStatus status = result.isNew() ? HttpStatus.CREATED : HttpStatus.OK;
+        return ResponseEntity.status(status).body(result.league());
     }
 
     @GetMapping("/teams")

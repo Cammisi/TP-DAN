@@ -9,7 +9,9 @@ import com.tpnube.fan_identity_service.repository.TeamRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.text.Normalizer;
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 
 @Service
@@ -42,6 +44,40 @@ public class CatalogService {
                         team.getLeague().getName()
                 ))
                 .toList();
+    }
+
+    public record LeagueResult(LeagueDTO league, boolean isNew) {}
+
+    // Para "escribir y/o elegir" liga en /admin, igual que con equipos: si el nombre ya
+    // existe se reutiliza. El id (a diferencia del de Team, T-77) sigue siendo un slug manual,
+    // así que acá se lo genera a partir del nombre en vez de pedirlo.
+    @Transactional
+    public LeagueResult createLeague(String name) {
+        if (name == null || name.isBlank()) {
+            throw new InvalidRequestException("El name es obligatorio");
+        }
+
+        Optional<League> existing = leagueRepository.findByName(name);
+        League league = existing.orElseGet(() -> leagueRepository.save(new League(generateLeagueId(name), name)));
+
+        return new LeagueResult(new LeagueDTO(league.getId(), league.getName()), existing.isEmpty());
+    }
+
+    private String generateLeagueId(String name) {
+        String base = slugify(name);
+        String id = base;
+        int suffix = 2;
+        while (leagueRepository.existsById(id)) {
+            id = base + "-" + suffix++;
+        }
+        return id;
+    }
+
+    private String slugify(String name) {
+        String withoutAccents = Normalizer.normalize(name, Normalizer.Form.NFD).replaceAll("[\\p{M}]", "");
+        String slug = withoutAccents.toLowerCase(Locale.ROOT).trim().replaceAll("[^a-z0-9]+", "-")
+                .replaceAll("^-+|-+$", "");
+        return slug.isBlank() ? "liga" : slug;
     }
 
     public record TeamResult(TeamCatalogDTO team, boolean isNew) {}
