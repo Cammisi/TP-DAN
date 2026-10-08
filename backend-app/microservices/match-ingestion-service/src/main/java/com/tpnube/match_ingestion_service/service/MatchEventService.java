@@ -53,6 +53,7 @@ public class MatchEventService {
         MatchEvent event = known == null
                 ? buildCustomEvent(match, type, request)
                 : switch (known) {
+                    case MATCH_START -> buildMatchStartEvent(match);
                     case GOAL -> buildGoalEvent(match, request);
                     case CARD -> buildCardEvent(match, request);
                     case MATCH_END -> buildMatchEndEvent(match, request);
@@ -63,7 +64,7 @@ public class MatchEventService {
 
         matchEventRepository.save(event);
         applyToMatch(match, known, event);
-        publish(match, known, event);
+        publish(match, event);
 
         log.info("Evento ingestado exitosamente: eventId={}, matchId={}, teamId={}, type={}",
                 event.getId(), match.getId(), event.getTeamId(), type);
@@ -77,7 +78,7 @@ public class MatchEventService {
         }
         return matchEventRepository.findAllByMatchIdOrderByOccurredAtAsc(matchId)
                 .stream()
-                .map(e -> toDTO(e, e.getTeamId()))
+                .map(this::toDTO)
                 .toList();
     }
 
@@ -126,6 +127,20 @@ public class MatchEventService {
             throw new InvalidEventException("El " + field + " es obligatorio y no puede ser negativo");
         }
         return value;
+    }
+
+    // Solo se inicia un partido que no empezó, así nadie recibe dos alertas de inicio.
+    // Como el inicio es de los dos equipos, no se guarda un teamId.
+    private MatchEvent buildMatchStartEvent(Match match) {
+        if (match.getStatus() != MatchStatus.SCHEDULED) {
+            throw new InvalidEventException(
+                    "El partido '" + match.getId() + "' no se puede iniciar: ya está " + match.getStatus());
+        }
+
+        MatchEvent event = new MatchEvent();
+        event.setMatchId(match.getId());
+        event.setType(EventType.MATCH_START.name());
+        return event;
     }
 
     private MatchEvent buildGoalEvent(Match match, MatchEventDTO request) {
@@ -189,6 +204,11 @@ public class MatchEventService {
             match.setStatus(MatchStatus.LIVE);
         } else {
             switch (known) {
+                case MATCH_START -> {
+                    match.setHomeScore(0);
+                    match.setAwayScore(0);
+                    match.setStatus(MatchStatus.LIVE);
+                }
                 case GOAL -> {
                     match.setHomeScore(event.getHomeScore());
                     match.setAwayScore(event.getAwayScore());
@@ -205,22 +225,20 @@ public class MatchEventService {
         matchRepository.save(match);
     }
 
-    private void publish(Match match, EventType known, MatchEvent event) {
-        if (known == EventType.MATCH_END) {
-            // Un mensaje por equipo participante, mismo eventId (contrato T-01 sección 5).
-            matchEventPublisher.publish(toDTO(event, match.getHomeTeamId()));
-            matchEventPublisher.publish(toDTO(event, match.getAwayTeamId()));
-        } else {
-            matchEventPublisher.publish(toDTO(event, event.getTeamId()));
-        }
+    // Todo evento se publica una vez por equipo del partido, con ese equipo como key:
+    // así les llega a los fans de los dos (contrato T-01 sección 5, D-7).
+    private void publish(Match match, MatchEvent event) {
+        MatchEventDTO message = toDTO(event);
+        matchEventPublisher.publish(match.getHomeTeamId(), message);
+        matchEventPublisher.publish(match.getAwayTeamId(), message);
     }
 
-    private MatchEventDTO toDTO(MatchEvent event, String teamId) {
+    private MatchEventDTO toDTO(MatchEvent event) {
         String cardType = event.getCardType() != null ? event.getCardType().name() : null;
         return new MatchEventDTO(
                 event.getId(),
                 event.getMatchId(),
-                teamId,
+                event.getTeamId(),
                 event.getType(),
                 event.getMinute(),
                 event.getDescription(),

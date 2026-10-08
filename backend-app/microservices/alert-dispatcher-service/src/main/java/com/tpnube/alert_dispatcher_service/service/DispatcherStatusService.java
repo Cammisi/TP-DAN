@@ -26,14 +26,14 @@ public class DispatcherStatusService {
         this.circuitBreakerRegistry = circuitBreakerRegistry;
     }
 
-    public synchronized void recordProcessed(MatchEventDTO event, int subscriberCount) {
+    public synchronized void recordProcessed(MatchEventDTO event, String notifiedTeamId, int subscriberCount) {
         addBounded(lastProcessedEvents, new ProcessedEventDTO(
-                event.eventId(), event.matchId(), event.teamId(), Instant.now(), subscriberCount));
+                event.eventId(), event.matchId(), notifiedTeamId, Instant.now(), subscriberCount));
     }
 
-    public synchronized void recordUndispatched(MatchEventDTO event, String reason) {
+    public synchronized void recordUndispatched(MatchEventDTO event, String notifiedTeamId, String reason) {
         addBounded(undispatchedEvents, new UndispatchedEventDTO(
-                event.eventId(), event.matchId(), event.teamId(), Instant.now(), reason));
+                event.eventId(), event.matchId(), notifiedTeamId, Instant.now(), reason));
     }
 
     public synchronized DispatcherStatusDTO getStatus() {

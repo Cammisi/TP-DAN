@@ -7,6 +7,7 @@ public record NotificationRequestDTO(
         String eventId,
         String matchId,
         String teamId,
+        String eventTeamId,
         String message,
         Instant occurredAt
 ) {}

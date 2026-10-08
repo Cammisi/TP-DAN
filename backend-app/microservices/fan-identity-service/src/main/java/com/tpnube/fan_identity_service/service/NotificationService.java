@@ -29,7 +29,7 @@ public class NotificationService {
 
     @Transactional
     public Long createNotification(String fanId, String eventId, String matchId, String teamId,
-                                    String message, Instant occurredAt) {
+                                    String eventTeamId, String message, Instant occurredAt) {
         if (fanId == null || fanId.isBlank()) {
             throw new InvalidRequestException("El fanId es obligatorio");
         }
@@ -62,7 +62,7 @@ public class NotificationService {
         // createdAt guarda el occurredAt del evento deportivo que originó la notificación
         // (cuándo pasó, no cuándo se insertó la fila): es la fecha que tiene sentido
         // mostrarle al fan y la que espera el contrato en la respuesta del listado.
-        Notification notification = new Notification(null, fan, message, matchId, teamId, eventId, occurredAt);
+        Notification notification = new Notification(null, fan, message, matchId, teamId, eventTeamId, eventId, occurredAt);
         notificationRepository.save(notification);
         log.info("Notificación persistida: id={}, fanId={}, eventId={}, matchId={}",
                 notification.getId(), fanId, eventId, matchId);
@@ -78,6 +78,7 @@ public class NotificationService {
                         n.getMessage(),
                         n.getMatchId(),
                         n.getTeamId(),
+                        n.getEventTeamId(),
                         n.getEventId(),
                         n.getCreatedAt()
                 ))

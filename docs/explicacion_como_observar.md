@@ -72,8 +72,8 @@ Entrá a http://localhost:8090. A la izquierda está el cluster **tp-nube-deport
 
 **Topics → `match-events`.** Es el buzón donde match-ingestion publica cada evento. Tiene 3 particiones, como 3 carriles paralelos. En la pestaña **Messages** está cada evento publicado; hacé clic en uno para expandirlo:
 
-- **Key**: el `teamId`. Todos los eventos de un mismo equipo van siempre a la misma partición, y así se procesan en orden.
-- **Value**: el JSON del evento (tipo, minuto, jugador, marcador).
+- **Key**: el `teamId` del equipo cuyos fans se notifican. Cada evento se publica dos veces, una con la key del local y otra con la del visitante, así les llega a los hinchas de los dos. Los mensajes con la misma key van siempre a la misma partición, y así se procesan en orden.
+- **Value**: el JSON del evento (tipo, minuto, jugador, marcador). Su `teamId` es el equipo que hizo el evento.
 - **Partition** y **Offset**: en qué carril quedó y en qué posición.
 
 **Consumers → `alert-dispatcher-service`.** Es quien lee del buzón.
@@ -85,7 +85,7 @@ Entrá a http://localhost:8090. A la izquierda está el cluster **tp-nube-deport
 
 1. `docker compose stop alert-dispatcher-service`
 2. Como admin, creá un gol en `/admin`. Igual responde bien, porque match-ingestion no depende del despachador.
-3. En Consumers, el lag pasa a `1`: el mensaje está guardado, esperando.
+3. En Consumers, el lag pasa a `2`: los dos mensajes del evento (uno por equipo) están guardados, esperando.
 4. `docker compose start alert-dispatcher-service`. Cuando arranca, el lag vuelve a `0` y la alerta llega igual.
 
 **Por consola.** Estos comandos corren las herramientas de Kafka adentro de su contenedor:
@@ -123,7 +123,7 @@ Entrá a http://localhost:3001 con `admin` / `admin`. Si te pide cambiar la clav
 
 En menos de un minuto vas a ver subir las curvas de `cloud-gateway` y `fan-identity-service` en los paneles de requests y latencia.
 
-**El panel del Circuit Breaker** se mueve solo cuando fan-identity falla varias veces seguidas. Para verlo pasar a `open`, seguí la demo de `explicacion_circuit_breaker.md`, sección 5: apagás fan-identity, cargás 6 goles del mismo equipo y lo volvés a prender.
+**El panel del Circuit Breaker** se mueve solo cuando fan-identity falla varias veces seguidas. Para verlo pasar a `open`, seguí la demo de `explicacion_circuit_breaker.md`, sección 5: apagás fan-identity, cargás 3 goles del mismo equipo y lo volvés a prender.
 
 ## 5. Grafana Explore: buscar logs y métricas
 
@@ -148,8 +148,8 @@ Explore es donde le hacés preguntas a Loki (logs) y a Prometheus (números); la
 La última es la que pide el enunciado: seguir un evento entre servicios. Reemplazá `EL_EVENT_ID` por un id real, que aparece en los logs del despachador ("Evento recibido: …") o en el JSON del mensaje en Kafka UI. Vas a ver, en orden:
 
 1. match-ingestion: "Evento ingestado exitosamente" y "publicado en match-events".
-2. alert-dispatcher: "Evento recibido" y el resultado del despacho.
-3. fan-identity: la notificación guardada, si alguien sigue a ese equipo.
+2. alert-dispatcher: "Evento recibido" dos veces (una para los fans de cada equipo) y el resultado de cada despacho.
+3. fan-identity: las notificaciones guardadas, si alguien sigue a alguno de los dos equipos.
 
 El botón **Live**, arriba, muestra los logs en vivo a medida que llegan.
 
@@ -230,12 +230,12 @@ Un mismo gol aparece en cinco lugares en cuestión de segundos; seguirlo de punt
 Preparación: el fan que uses tiene que seguir a uno de los dos equipos del partido. Verificalo en `/subscriptions`.
 
 1. Abrí cuatro pestañas: Kafka UI (Topics → `match-events` → Messages), Grafana Explore con Loki, `/alerts` logueado como el fan, y una terminal con `docker compose logs -f alert-dispatcher-service`.
-2. En otra ventana, logueado como admin, creá un gol en `/admin` del equipo que sigue el fan.
-3. **Terminal:** aparece "Evento recibido: `<eventId>` (GOAL) del equipo `<teamId>`". Copiá ese id.
-4. **Kafka UI:** refrescá Messages. El mensaje nuevo tiene como key el `teamId` del equipo. En Consumers, el lag sigue en `0`.
+2. En otra ventana, logueado como admin, cargá en `/admin` un gol de cualquiera de los dos equipos: le llega al fan aunque lo haga el rival.
+3. **Terminal:** aparece dos veces "Evento recibido: `<eventId>` (GOAL) para los fans del equipo `<teamId>`", una por cada equipo. Copiá ese id.
+4. **Kafka UI:** refrescá Messages. Hay dos mensajes nuevos con el mismo value y distinta key (el local y el visitante). En Consumers, el lag sigue en `0`.
 5. **Loki:** pegá la consulta del recorrido con ese `eventId`. Vas a ver los tres servicios en orden: match-ingestion, alert-dispatcher y fan-identity.
 6. **Postgres:** `select * from notifications order by id desc limit 1;` muestra la notificación guardada, con el mismo `event_id`.
-7. **App:** en `/alerts`, la alerta nueva. Si no aparece, tocá **Actualizar**.
+7. **App:** en `/alerts`, la alerta nueva: arriba, el equipo que seguís; en el mensaje, el equipo que hizo el gol. Si no aparece, tocá **Actualizar**.
 
 Si en el paso 3 ves "no despachado" en vez del resultado, mirá la sección 9.
 

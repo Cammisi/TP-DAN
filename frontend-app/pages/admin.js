@@ -18,6 +18,7 @@ const CUSTOM_TYPE = "CUSTOM";
 const NEW_TEAM = "__NEW__";
 
 const EVENT_TYPES = [
+  { value: "MATCH_START", label: "Inicio del partido" },
   { value: "GOAL", label: "Gol" },
   { value: "CARD", label: "Tarjeta" },
   { value: "MATCH_END", label: "Fin del partido" },
@@ -185,7 +186,7 @@ function AdminContent() {
   // Qué campos pide cada tipo (contrato T-01, sección 3.1). "Otro" es solo de la UI:
   // se manda como texto libre en el campo type.
   const isCustom = type === CUSTOM_TYPE;
-  const needsTeam = type !== "MATCH_END";
+  const needsTeam = type !== "MATCH_START" && type !== "MATCH_END";
   const needsPlayer = type === "GOAL" || type === "CARD";
   const needsScores = type === "GOAL" || type === "MATCH_END";
 
@@ -514,7 +515,7 @@ function AdminContent() {
             ) : (
               <ul className={styles.eventList}>
                 {status.lastProcessedEvents.map((e) => (
-                  <li key={e.eventId}>
+                  <li key={`${e.eventId}-${e.teamId}`}>
                     {teamNames[e.teamId] ?? e.teamId} — {e.subscriberCount} fan(s) notificados
                   </li>
                 ))}
@@ -526,7 +527,7 @@ function AdminContent() {
             ) : (
               <ul className={styles.eventList}>
                 {status.undispatchedEvents.map((e) => (
-                  <li key={e.eventId}>
+                  <li key={`${e.eventId}-${e.teamId}`}>
                     {teamNames[e.teamId] ?? e.teamId} — {e.reason}
                   </li>
                 ))}

@@ -49,7 +49,7 @@ Estado del código backend, actualizado a medida que se implementan tareas.
 
 ## 2. Decisiones de diseño
 
-Huecos que ni el enunciado ni la resolución propuesta resolvían. **Las seis están decididas**: las tareas de la sección 6 ya las reflejan. Si alguna se reabre, hay que revisar las tareas listadas en *Afecta*.
+Huecos que ni el enunciado ni la resolución propuesta resolvían. **Las siete están decididas**: las tareas de la sección 6 ya las reflejan. Si alguna se reabre, hay que revisar las tareas listadas en *Afecta*.
 
 - [x] **D-1 · ¿Quién es dueño del catálogo de ligas y equipos?** → **`fan-identity-service` (PostgreSQL)**
   `League` y `Team` viven en Postgres junto a `Fan` y `Subscription`, con FK real entre suscripción y equipo. Es exactamente la "integridad referencial" con la que el informe justificó elegir SQL.
@@ -84,6 +84,11 @@ Huecos que ni el enunciado ni la resolución propuesta resolvían. **Las seis es
   Con D-3, el historial del fan se lee desde `fan-identity-service` (`GET /api/fans/me/notifications`), así que la ruta quedaba huérfana. `alert-dispatcher-service` la usa para exponer últimos eventos procesados y estado del circuito, que es lo que consume el panel de administrador.
   *Afecta:* T-31, T-64, T-65.
 
+- [x] **D-7 · ¿A quién se le avisa un evento?** → **a los fans de los dos equipos del partido** (decidido el 2026-10-08, reemplaza lo que fijó T-01)
+  Un gol de Boca también le importa al hincha del rival. Hasta acá, gol, tarjeta y texto libre llegaban solo a los fans del equipo que los hizo; únicamente `MATCH_END` llegaba a los dos.
+  **Cómo:** `match-ingestion-service` publica cada evento **una vez por equipo del partido**: mismo payload (el evento, igual que en la API REST), distinta key de Kafka (el equipo cuyos fans se notifican). Es generalizar lo que ya se hacía con `MATCH_END`, así el consumer sigue sin casos especiales por tipo. La notificación guarda los dos equipos (`teamId` = el que sigue el fan, `eventTeamId` = el que hizo el evento) para que `/alerts` no muestre un gol del rival como si fuera del propio equipo.
+  *Afecta:* T-01 (contrato, secciones 2.3, 3 y 5), T-23, T-30, T-14, T-64, T-81.
+
 ---
 
 ## 3. Inconsistencias y riesgos detectados
@@ -105,6 +110,7 @@ Huecos que ni el enunciado ni la resolución propuesta resolvían. **Las seis es
 - [ ] **R-15 · El volumen `kafka-data` no guarda nada: Kafka pierde tópicos, mensajes y offsets en cada `docker compose down`.** Detectado el 2026-10-01: el compose monta `kafka-data` en `/var/lib/kafka/data`, pero el broker escribe en `/tmp/kafka-logs` (el default de Kafka, porque el compose no setea `KAFKA_LOG_DIRS`). Verificado con `ls` dentro del contenedor: `/var/lib/kafka/data` vacío y `/tmp/kafka-logs` con `match-events-*` y `__consumer_offsets-*`. `restart` y `stop` no lo muestran porque el filesystem del contenedor sobrevive, pero `down` lo borra. Contradice la tabla de volúmenes de `explicacion_docker_compose.md` ("los mensajes del sistema de mensajería Kafka") y hace que R-14 se repita en cada `up` posterior a un `down`, no solo la primera vez. Opción más simple: `KAFKA_LOG_DIRS: /var/lib/kafka/data` en el servicio `kafka` del compose. Se resuelve en T-74.
 - [x] **R-16 · El timeout de 3 s del TimeLimiter del Circuit Breaker se ignora en silencio: el efectivo es 1 s.** Detectado el 2026-10-08: con el stack recién levantado, un `GOAL` de Boca (`teamId: "4"`) quedó en `undispatchedEvents` por "TimeLimiter 'fanIdentityService' recorded a timeout exception", y Prometheus midió esa llamada fallida en 1,14 s (`resilience4j_circuitbreaker_calls_seconds_max{kind="failed"}`), no en 3 s. Causa, verificada en el bytecode de `spring-cloud-circuitbreaker-resilience4j-5.0.2`: `Resilience4JCircuitBreakerFactory.create` toma la config del CircuitBreaker del `Customizer`, pero la del TimeLimiter la busca solo en el `TimeLimiterRegistry` (por id, y si no hay, el default del registro: 1 s), así que el `.timeLimiterConfig(...)` de `CircuitBreakerConfiguration` no tiene efecto. Mismo patrón que R-10: config que no da error y no se aplica. Contradice la tabla de `explicacion_circuit_breaker.md` y hace más probable R-11, porque la primera llamada en frío a fan-identity supera 1 s con facilidad (en caliente, medida a mano desde el contenedor del despachador, tardó 0,73 s). Opción más simple, a verificar: declarar el timeout por YAML (`resilience4j.timelimiter.instances.fanIdentityService.timeout-duration: 3s`), sacar el `.timeLimiterConfig(...)` que no se usa y cubrirlo con un test que lea el `TimeLimiterRegistry`, como el de Feign de T-41. **Corregido en T-78**: el timeout pasó al YAML y lo cubre un test con una llamada de 1,5 s por el circuito real.
 - [x] **R-17 · `/admin` no refresca el estado del partido después de cargar un evento.** Detectado el 2026-10-08: un partido creado como `SCHEDULED` se sigue mostrando `(SCHEDULED)` en el selector de `/admin` después de cargarle goles, aunque en Mongo ya está `LIVE` (verificado con el partido `6ac7cad6…` y con `match-002`, ambos con 2 goles y en `LIVE`). El backend está bien: `MatchEventService.applyToMatch` pasa el partido a `LIVE` con cualquier evento y a `FINISHED` con `MATCH_END`. La causa está en `handleSubmit` de `pages/admin.js`: recarga el estado del despachador (`loadStatus`) pero no la lista de partidos (`loadMatches`), que solo se pide al abrir la página y al crear un partido. Recargando la página se ve el estado real. Opción más simple: llamar también a `loadMatches()` después de ingestar el evento. **Corregido en T-79** con esa misma opción.
+- [ ] **R-18 · Después de reiniciar `alert-dispatcher-service`, la primera consulta de suscriptores puede fallar aunque fan-identity esté sano.** Detectado el 2026-10-08 verificando T-80/T-81: con el despachador recién redesplegado, el primer mensaje (un `MATCH_START`) cortó por el TimeLimiter a los 3 s, y el segundo falló al instante con `'messageConverters' must not be empty`, un error de Spring Cloud OpenFeign. El tercero ya respondió bien, y en caliente cada consulta tarda unos 300 ms. Hipótesis, no confirmada: el cliente Feign se inicializa recién en la primera llamada (más de 3 s en esta máquina), el TimeLimiter interrumpe el hilo a mitad de esa inicialización, y la llamada siguiente encuentra el cliente a medio armar. Es el mismo síntoma de R-11 con una causa más precisa: el primer evento después de reiniciar el despachador puede quedar sin despachar para los dos equipos. Opción a investigar: inicializar el cliente Feign al arrancar el servicio en vez de en la primera llamada. **Para el coloquio:** mandar un evento de prueba después de cualquier reinicio del despachador. Sin tarea asignada todavía.
 
 ---
 
@@ -570,6 +576,29 @@ La Fase 0 y la Fase 2 se hacen **juntos**: definen contratos y tocan puntos de i
     - [x] Con el stack levantado, crear un partido y cargarle un gol en `/admin` cambia su etiqueta de `(SCHEDULED)` a `(LIVE)` sin recargar la página. *Verificado por el integrante en el navegador el 2026-10-08, después de recargar con Ctrl+F5: una pestaña abierta antes de reconstruir la imagen sigue corriendo el JavaScript viejo.*
   - **Terminada cuando:** el segundo requisito se verifica en el navegador.
 
+- [ ] **T-80 · Evento de inicio de partido (`MATCH_START`)** — `match-ingestion-service`, `alert-dispatcher-service`, `frontend-app/pages/admin.js` · depende de: T-21, T-30, T-65 · carril B
+  - **Qué:** un tipo de evento `MATCH_START` que pasa el partido de `SCHEDULED` a `LIVE` con marcador 0-0 y les avisa a los fans de los dos equipos ("¡Arrancó el partido!").
+  - **Por qué:** pedido por el integrante el 2026-10-08. Hasta acá el inicio era un efecto colateral del primer gol o tarjeta; `MATCH_END` ya era explícito. Pedida sin `plan_*` aparte, con aprobación explícita.
+  - **Afecta:** `EventType` y `MatchEventService` de match-ingestion; `AlertDispatchService.buildMessage`; el selector de tipo de `/admin`; contrato (sección 3); `explicacion_modelo_mongo.md`.
+  - **Decisiones tomadas:** no pide equipo, jugador ni marcador; el minuto sigue siendo obligatorio, como en todo evento. Solo se acepta sobre un partido `SCHEDULED`: si ya está `LIVE` (por ejemplo, porque entró un gol antes) o `FINISHED`, responde `400 INVALID_EVENT`, así nadie recibe dos alertas de inicio. Se mantiene el paso automático a `LIVE` con cualquier otro evento (T-79).
+  - **Requisitos:**
+    - [x] `MATCH_START` sobre un partido `SCHEDULED` lo deja `LIVE` 0-0 y se publica para los dos equipos. *`MatchEventServiceTest` + verificado por API el 2026-10-08 con un Liverpool vs Man City nuevo: `SCHEDULED` → `LIVE` 0-0, y en Kafka un mensaje con key `6` y otro con key `7`.*
+    - [x] Sobre un partido `LIVE` o `FINISHED` da `400 INVALID_EVENT` y no persiste nada. *Verificado: segundo inicio del mismo partido → `400` "ya está LIVE"; inicio de `match-003` → `400` "ya está FINISHED".*
+    - [x] La alerta dice "¡Arrancó el partido!". *Verificado: `fan1` (Liverpool) y `fan2` (Man City) la recibieron, con `eventTeamId` en `null`.*
+    - [ ] `/admin` ofrece "Inicio del partido" sin pedir equipo, jugador ni marcador. *`next build` compila; falta verlo en el navegador.*
+  - **Terminada cuando:** tests en verde y, con el stack levantado, un partido creado desde `/admin` arranca con "Inicio del partido" y los fans de los dos equipos reciben la alerta.
+
+- [ ] **T-81 · Todo evento les llega a los fans de los dos equipos** — `match-ingestion-service`, `alert-dispatcher-service`, `fan-identity-service`, `frontend-app/pages/alerts.js` · depende de: T-23, T-30, T-14, T-64 · carril B
+  - **Qué:** implementa D-7. Cada evento se publica una vez por equipo del partido (key = equipo a notificar, payload = el evento); la notificación guarda además el equipo que hizo el evento, y `/alerts` lo muestra.
+  - **Por qué:** pedido por el integrante el 2026-10-08: un gol del rival le importa al hincha. Pedida sin `plan_*` aparte, con aprobación explícita.
+  - **Afecta:** `MatchEventService` y `MatchEventPublisher` (match-ingestion); `MatchEventListener`, `AlertDispatchService`, `DispatcherStatusService` y `NotificationRequestDTO` (alert-dispatcher); `Notification` (columna nueva `event_team_id`, la crea `ddl-auto: update` sin borrar datos), DTOs, `NotificationService` e `InternalFanController` (fan-identity); `pages/alerts.js` y las keys de las listas de estado en `pages/admin.js`; contrato (secciones 2.3, 4 y 5), `explicacion_mensajeria_kafka.md`, `explicacion_circuit_breaker.md` (la demo cambia: cada evento son dos consultas), `guion_coloquio.md`, `quien-juega.http`.
+  - **Decisiones tomadas:** la key del mensaje (no un campo nuevo del payload) dice a quién notificar, así el payload sigue siendo idéntico al de la API REST. Un mensaje sin key se registra como no despachado. Las alertas viejas quedan con `eventTeamId` en `null` y se muestran como antes.
+  - **Requisitos:**
+    - [x] Un gol, una tarjeta o un tipo libre se publica dos veces, con la key del local y la del visitante. *`MatchEventServiceTest` + verificado en Kafka: el gol de Liverpool salió con key `6` y con key `7`, ambos con `teamId: "6"` en el payload.*
+    - [ ] El fan del rival recibe la alerta, y en `/alerts` se ve qué equipo hizo el evento. *Verificado por API: `fan2` (Man City) recibió el gol de Liverpool con `teamId: "7"` y `eventTeamId: "6"`. Falta verlo en `/alerts`.*
+    - [ ] El estado del despachador muestra cada evento una vez por equipo, sin keys de React duplicadas en `/admin`. *Verificado por API: el gol aparece dos veces en `lastProcessedEvents`, con `teamId` `6` y `7`. Falta verlo en `/admin`.*
+  - **Terminada cuando:** tests en verde y, con el stack levantado, un gol de un equipo les llega a un fan de cada equipo del partido, con el equipo que lo hizo visible en `/alerts`.
+
 ---
 
 ## 7. Resumen de avance
@@ -581,8 +610,8 @@ La Fase 0 y la Fase 2 se hacen **juntos**: definen contratos y tocan puntos de i
 | 2 — Integración y seguridad | 3 | 3 |
 | 3 — Requisitos transversales | 2 | 2 |
 | 4 — Frontend | 6 | 6 |
-| 5 — Cierre y entrega | 10 | 7 |
-| **Total** | **36** | **33** |
+| 5 — Cierre y entrega | 12 | 7 |
+| **Total** | **38** | **33** |
 
 > T-66 (Panel Principal) es una tarea **propuesta**, no forma parte del recuento de 33: se agrega a la tabla si el grupo decide tomarla.
 

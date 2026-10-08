@@ -2,6 +2,7 @@ package com.tpnube.match_ingestion_service.domain;
 
 // Tipos con reglas propias. Cualquier otro texto se acepta como evento genérico.
 public enum EventType {
+    MATCH_START,
     GOAL,
     CARD,
     MATCH_END;

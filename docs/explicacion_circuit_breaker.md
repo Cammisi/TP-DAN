@@ -71,12 +71,12 @@ Requiere el stack completo arriba y `fan1@quienjuega.com` suscripto a Colón (`t
 
 1. `GET http://localhost:8080/api/alerts/status` → `circuitState: "CLOSED"`.
 2. `docker compose stop fan-identity-service`.
-3. Ingestar 6 eventos `GOAL` de Colón (`teamId: "1"`) en `match-001` (mismo curl que en T-21). Cada POST responde `201` igual: match-ingestion no depende de fan-identity.
-4. En los logs de `alert-dispatcher-service`: los primeros fallos muestran "Falló la consulta de suscriptores..."; a partir del quinto, "Circuito abierto: no se consultó fan-identity...".
-5. `GET /api/alerts/status` → `circuitState: "OPEN"`, con los 6 eventos en `undispatchedEvents` y su motivo.
+3. Ingestar 3 eventos `GOAL` de Colón (`teamId: "1"`) en `match-001` (mismo curl que en T-21). Cada POST responde `201` igual: match-ingestion no depende de fan-identity. Cada evento dispara **dos** consultas de suscriptores, una por equipo del partido (D-7, T-81), así que son 6 llamadas.
+4. En los logs de `alert-dispatcher-service`: las primeras 5 consultas muestran "Falló la consulta de suscriptores..."; con la quinta se abre el circuito, y la sexta ya muestra "Circuito abierto: no se consultó fan-identity...".
+5. `GET /api/alerts/status` → `circuitState: "OPEN"`, con cada evento dos veces en `undispatchedEvents` (una por equipo) y su motivo.
 6. `docker compose start fan-identity-service`, esperar a que aparezca `UP` en Eureka (`:8761`, unos 30-60 s) y a que pasen los 15 s de `waitDurationInOpenState`.
-7. Ingestar 3 eventos más: con el primero el circuito pasa a `HALF_OPEN`; si las 3 llamadas de prueba salen bien, vuelve a `CLOSED`.
-8. `GET /api/alerts/status` → `circuitState: "CLOSED"` de nuevo, y `fan1` ve esas 3 notificaciones nuevas en `GET /api/fans/me/notifications` (las 6 de mientras el circuito estuvo abierto no se reintentan, ver sección 6).
+7. Ingestar 2 eventos más: con el primero el circuito pasa a `HALF_OPEN` y hace 2 de las 3 llamadas de prueba; el segundo hace la tercera. Si las 3 salen bien, vuelve a `CLOSED`.
+8. `GET /api/alerts/status` → `circuitState: "CLOSED"` de nuevo, y `fan1` ve esas 2 notificaciones nuevas en `GET /api/fans/me/notifications` (las 3 de mientras el circuito estuvo abierto no se reintentan, ver sección 6).
 
 ## 6. Limitaciones aceptadas
 

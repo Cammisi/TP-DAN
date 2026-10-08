@@ -86,11 +86,13 @@ Todas operan siempre sobre el fan del JWT (nunca sobre un id del body/path).
 | POST | `/internal/fans/notifications` | interno, header `X-Internal-Api-Key` (D-3, T-41) |
 
 **GET /api/fans/me/notifications**
-- 200: `[{ "id": string, "message": string, "matchId": string, "teamId": string, "eventId": string, "createdAt": ISO-8601 }]`
+- 200: `[{ "id": string, "message": string, "matchId": string, "teamId": string, "eventTeamId": string|null, "eventId": string, "createdAt": ISO-8601 }]`
 - Orden: de más nueva a más vieja. Solo las del fan del JWT.
+- `teamId` es el equipo que sigue el fan, por el que le llegó la alerta. `eventTeamId` es el equipo que hizo el evento (T-81): puede ser el rival, y es `null` en el inicio y el fin del partido y en las alertas anteriores a T-81.
 
 **POST /internal/fans/notifications** — callback de alert-dispatcher (D-3)
-- Request: `{ "fanId": string, "eventId": string, "matchId": string, "teamId": string, "message": string, "occurredAt": ISO-8601 }`
+- Request: `{ "fanId": string, "eventId": string, "matchId": string, "teamId": string, "eventTeamId": string|null, "message": string, "occurredAt": ISO-8601 }`
+- `eventTeamId` es opcional; el resto de los campos son obligatorios.
 - 201: `{ "id": string }`
 - 404 `FAN_NOT_FOUND` si el `fanId` no existe.
 - Fuera de `/api/**`: el gateway no lo rutea, solo alcanzable dentro de la red Docker.
@@ -160,26 +162,28 @@ Todos bajo `/api/matches/**`.
 - 201: `{ "eventId": string }`
 - 400 `INVALID_EVENT` si falta un campo obligatorio, si el `type` está vacío o supera los 40 caracteres. No persiste.
 - `type` sin reglas propias se acepta como texto libre (T-75): se guarda en mayúsculas y el partido queda `LIVE` sin cambiar el marcador. Requiere `teamId` del partido.
+- `MATCH_START` (T-80) no pide `teamId`, `playerName` ni marcador: pasa el partido de `SCHEDULED` a `LIVE` con marcador 0-0. Si el partido ya está `LIVE` o `FINISHED`, responde 400 `INVALID_EVENT` y no persiste, así nadie recibe dos alertas de inicio.
+- Cualquier otro evento sobre un partido `SCHEDULED` también lo pasa a `LIVE`: el inicio explícito no es obligatorio (decidido en T-79).
 - 404 `MATCH_NOT_FOUND` si `matchId` no existe en su propia base. **No** valida `teamId` contra el catálogo de fan-identity (D-1: no vale la pena la llamada entre servicios).
 
 > **R-7 (resuelto en T-40):** `match-ingestion-service` no tiene Spring Security propio (D-2), así que el rol lo chequea el gateway: con un token de fan este POST devuelve `403 FORBIDDEN` sin llegar al microservicio (ver sección 7).
 
 ### 3.1 `MatchEventDTO`
 
-Un único shape para los tres tipos de evento (gol, tarjeta, fin de partido), con campos específicos en `null` cuando no aplican:
+Un único shape para todos los tipos de evento (inicio, gol, tarjeta, fin de partido y texto libre), con campos específicos en `null` cuando no aplican:
 
 ```java
 public record MatchEventDTO(
     String eventId,       // null en el request de ingesta, lo asigna el servicio
     String matchId,
-    String teamId,         // equipo al que pertenece el evento
-    String type,           // "GOAL" | "CARD" | "MATCH_END", o texto libre (máx. 40, ej. "PENAL")
+    String teamId,         // equipo que hizo el evento; null en MATCH_START y MATCH_END
+    String type,           // "MATCH_START" | "GOAL" | "CARD" | "MATCH_END", o texto libre (máx. 40, ej. "PENAL")
     Integer minute,
     String description,
-    String playerName,     // solo GOAL y CARD, null en MATCH_END
+    String playerName,     // solo GOAL y CARD, null en el resto
     String cardType,       // solo CARD: "YELLOW" | "RED", null en el resto
-    Integer homeScore,     // solo GOAL y MATCH_END, null en CARD
-    Integer awayScore,     // solo GOAL y MATCH_END, null en CARD
+    Integer homeScore,     // solo GOAL y MATCH_END, null en el resto
+    Integer awayScore,     // solo GOAL y MATCH_END, null en el resto
     Instant occurredAt
 ) {}
 ```
@@ -223,18 +227,19 @@ Solo expone el estado del despachador para el panel de admin; el historial del f
   }
   ```
 - `undispatchedEvents` (agregado en T-31): eventos que no se pudieron despachar porque falló la consulta de suscriptores (circuito abierto o fan-identity caído), o porque fallaron **todos** los callbacks de notificación de ese evento. Es el registro que reemplaza al fallback silencioso original.
+- `teamId` en las dos listas es el equipo cuyos fans se notificaban con ese mensaje, no el que hizo el evento: como cada evento se publica una vez por equipo del partido (sección 5), cada `eventId` aparece dos veces, una por equipo.
 - `subscriberCount` en `lastProcessedEvents` es la cantidad de fans **efectivamente notificados**, no la cantidad de suscriptos que tenía el equipo: si el callback falla para alguno mientras el evento sigue apareciendo acá (no todos fallaron), el número ya descuenta esos fallos.
 - Ambas listas guardan como máximo los últimos 20 elementos, más nuevos primero, en memoria: se reinician si el servicio se reinicia (ver `docs/explicacion_circuit_breaker.md`).
 
 ## 5. Esquema del evento Kafka
 
 - **Tópico:** `match-events`, declarado con un bean `NewTopic` en `match-ingestion-service` (no se depende de auto-creación).
-- **Clave de partición:** `teamId`.
-- **Payload:** el mismo `MatchEventDTO` de 3.1, ya con `eventId` asignado.
-- **Decisión de diseño — `MATCH_END` involucra dos equipos:** como la clave es un único `teamId` y `alert-dispatcher-service` resuelve suscriptores por equipo, `match-ingestion-service` publica **un mensaje por equipo participante** cuando el evento es `MATCH_END` (mismo `eventId`, dos mensajes con `teamId` distinto). Para `GOAL` y `CARD` se publica un solo mensaje, con el `teamId` al que pertenece el evento. Así el consumer de alert-dispatcher no necesita casos especiales por tipo de evento.
+- **Clave de partición (`key`):** el id del equipo cuyos fans se notifican con ese mensaje. No siempre es el equipo que hizo el evento.
+- **Payload (`value`):** el mismo `MatchEventDTO` de 3.1, ya con `eventId` asignado. Su `teamId` es el equipo que hizo el evento, igual que en la API REST.
+- **Decisión de diseño — todo evento se notifica a los dos equipos (D-7, T-81):** `match-ingestion-service` publica **cada evento dos veces, una por equipo del partido**: mismo `eventId` y mismo payload, distinta key. `alert-dispatcher-service` busca los suscriptos del equipo de la key, sin casos especiales por tipo de evento. Así un gol de Boca les llega a los hinchas de Boca y a los del rival. Hasta T-81 esto se hacía solo con `MATCH_END`; gol y tarjeta llegaban únicamente a los fans del equipo que los hizo.
 - **Resiliencia de la publicación (T-23):** si Kafka está caído, el evento ya fue persistido en Mongo antes de intentar publicar; el fallo de publicación se loguea pero no revierte la persistencia ni falla el POST.
 
-Ejemplo de mensaje (mismo evento de gol de 3.1): `value` = el DTO de arriba, `key` = `"1"`.
+Ejemplo: el gol de Colón de 3.1, en `match-001` (Colón `"1"` vs Unión `"2"`), son dos mensajes con el DTO de arriba como `value`, uno con `key` = `"1"` y otro con `key` = `"2"`.
 
 ## 6. Prefijo de endpoints internos
 

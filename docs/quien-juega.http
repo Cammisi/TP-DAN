@@ -97,7 +97,7 @@ Content-Type: application/json
 GET {{gateway}}/api/fans/me/notifications
 Authorization: Bearer {{tokenFan}}
 
-### 10. Estado del despachador — circuitState: "CLOSED", el evento en lastProcessedEvents
+### 10. Estado del despachador — circuitState: "CLOSED", el evento dos veces en lastProcessedEvents (una por equipo del partido, T-81)
 GET {{gateway}}/api/alerts/status
 Authorization: Bearer {{tokenAdmin}}
 

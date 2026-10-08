@@ -17,8 +17,8 @@ Ninguna de las dos es mejor que un documento por evento con solo los campos que 
 
 Dos colecciones (`matches` y `match_events`), sin relación declarada entre ellas a nivel de Mongo (no hay `@DBRef`): `MatchEvent.matchId` es un string que apunta al `_id` de un `Match`, resuelto a mano en el código (`matchRepository.existsById(matchId)`), no por el motor.
 
-- **`Match`**: `id` (asignado a mano, ej. `"match-001"`, no un `ObjectId` generado), `homeTeamId`, `awayTeamId`, `status` (`SCHEDULED`/`LIVE`/`FINISHED`) y el marcador (`Integer`, no `int`, porque un partido que no arrancó no tiene marcador).
-- **`MatchEvent`**: un único documento para los tres tipos. Los campos que no aplican a un tipo quedan en `null`, y Spring Data Mongo **no persiste los campos `null`** — por eso un documento `CARD` en la base literalmente no tiene las claves `homeScore`/`awayScore`, no las tiene en `0` ni vacías. Se puede confirmar con `mongosh`:
+- **`Match`**: `id` (asignado a mano, ej. `"match-001"`, no un `ObjectId` generado), `homeTeamId`, `awayTeamId`, `status` (`SCHEDULED`/`LIVE`/`FINISHED`) y el marcador (`Integer`, no `int`, porque un partido que no arrancó no tiene marcador). `MATCH_START` lo pasa a `LIVE` con 0-0 (T-80), cualquier otro evento también lo pasa a `LIVE`, y `MATCH_END` a `FINISHED`.
+- **`MatchEvent`**: un único documento para todos los tipos. Los campos que no aplican a un tipo quedan en `null`, y Spring Data Mongo **no persiste los campos `null`** — por eso un documento `CARD` en la base literalmente no tiene las claves `homeScore`/`awayScore`, no las tiene en `0` ni vacías. Se puede confirmar con `mongosh`:
 
   ```js
   db.match_events.findOne({ type: "CARD" })

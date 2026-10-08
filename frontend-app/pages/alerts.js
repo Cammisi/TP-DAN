@@ -79,7 +79,13 @@ function AlertsContent() {
             {describeMatch(notification.matchId) && (
               <p className={styles.match}>{describeMatch(notification.matchId)}</p>
             )}
-            <p className={styles.message}>{notification.message}</p>
+            <p className={styles.message}>
+              {/* El badge de arriba es el equipo que seguís; este, el que hizo el evento (D-7). */}
+              {notification.eventTeamId && (
+                <strong>{teamNames[notification.eventTeamId] ?? notification.eventTeamId}: </strong>
+              )}
+              {notification.message}
+            </p>
           </li>
         ))}
       </ul>

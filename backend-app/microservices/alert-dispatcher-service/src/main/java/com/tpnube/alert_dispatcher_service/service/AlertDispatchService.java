@@ -30,19 +30,27 @@ public class AlertDispatchService {
         this.dispatcherStatusService = dispatcherStatusService;
     }
 
-    public void dispatch(MatchEventDTO event) {
+    // notifiedTeamId (la key del mensaje) puede no ser el equipo que hizo el evento: ver D-7.
+    public void dispatch(MatchEventDTO event, String notifiedTeamId) {
+        if (notifiedTeamId == null || notifiedTeamId.isBlank()) {
+            log.warn("Evento {} sin equipo a notificar (mensaje sin key): no se despacha", event.eventId());
+            dispatcherStatusService.recordUndispatched(event, notifiedTeamId,
+                    "El mensaje no indica a qué equipo notificar");
+            return;
+        }
+
         List<FanSubscriberDTO> subscribers;
         try {
-            subscribers = fanIdentityLookupService.getSubscribers(event.teamId());
+            subscribers = fanIdentityLookupService.getSubscribers(notifiedTeamId);
         } catch (SubscribersUnavailableException e) {
-            log.warn("Evento {} del equipo {} no despachado: {}", event.eventId(), event.teamId(), e.getMessage());
-            dispatcherStatusService.recordUndispatched(event, e.getMessage());
+            log.warn("Evento {} para el equipo {} no despachado: {}", event.eventId(), notifiedTeamId, e.getMessage());
+            dispatcherStatusService.recordUndispatched(event, notifiedTeamId, e.getMessage());
             return;
         }
 
         if (subscribers.isEmpty()) {
-            log.info("Evento {} del equipo {} sin suscriptos", event.eventId(), event.teamId());
-            dispatcherStatusService.recordProcessed(event, 0);
+            log.info("Evento {} para el equipo {} sin suscriptos", event.eventId(), notifiedTeamId);
+            dispatcherStatusService.recordProcessed(event, notifiedTeamId, 0);
             return;
         }
 
@@ -54,6 +62,7 @@ public class AlertDispatchService {
                         subscriber.fanId(),
                         event.eventId(),
                         event.matchId(),
+                        notifiedTeamId,
                         event.teamId(),
                         message,
                         event.occurredAt()
@@ -69,17 +78,18 @@ public class AlertDispatchService {
         int notified = subscribers.size() - failures;
         if (notified == 0) {
             // Que fallen todos los callbacks es, para el panel de admin, lo mismo que no despachar.
-            dispatcherStatusService.recordUndispatched(event,
+            dispatcherStatusService.recordUndispatched(event, notifiedTeamId,
                     "Fallaron los " + failures + " callbacks de notificación");
         } else {
-            dispatcherStatusService.recordProcessed(event, notified);
+            dispatcherStatusService.recordProcessed(event, notifiedTeamId, notified);
         }
-        log.info("Evento {}: {} notificaciones creadas, {} fallidas",
-                event.eventId(), notified, failures);
+        log.info("Evento {} para el equipo {}: {} notificaciones creadas, {} fallidas",
+                event.eventId(), notifiedTeamId, notified, failures);
     }
 
     private String buildMessage(MatchEventDTO event) {
         return switch (event.type()) {
+            case "MATCH_START" -> "¡Arrancó el partido!";
             case "GOAL" -> "¡Gol! %s (%d') — marcador %d-%d".formatted(
                     event.playerName(), event.minute(), event.homeScore(), event.awayScore());
             case "CARD" -> "Tarjeta %s para %s (%d')".formatted(

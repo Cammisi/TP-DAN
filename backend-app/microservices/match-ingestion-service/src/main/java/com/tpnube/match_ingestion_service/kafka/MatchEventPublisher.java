@@ -24,27 +24,27 @@ public class MatchEventPublisher {
 
     // El evento ya quedó persistido en Mongo antes de llamar acá: un fallo de
     // publicación se loguea pero nunca revierte la persistencia ni el POST.
-    public void publish(MatchEventDTO event) {
+    public void publish(String notifiedTeamId, MatchEventDTO event) {
         try {
-            kafkaTemplate.send(topic, event.teamId(), event)
+            kafkaTemplate.send(topic, notifiedTeamId, event)
                     .whenComplete((result, ex) -> {
                         if (ex != null) {
-                            log.error("Fallo al publicar el evento {} del equipo {} en Kafka",
-                                    event.eventId(), event.teamId(), ex);
+                            log.error("Fallo al publicar el evento {} para el equipo {} en Kafka",
+                                    event.eventId(), notifiedTeamId, ex);
                         } else {
-                            logSuccess(event, result);
+                            logSuccess(event, notifiedTeamId, result);
                         }
                     });
         } catch (Exception ex) {
             // Camino sincrónico: se superó max.block.ms.
-            log.error("Fallo al publicar el evento {} del equipo {} en Kafka",
-                    event.eventId(), event.teamId(), ex);
+            log.error("Fallo al publicar el evento {} para el equipo {} en Kafka",
+                    event.eventId(), notifiedTeamId, ex);
         }
     }
 
-    private void logSuccess(MatchEventDTO event, SendResult<String, MatchEventDTO> result) {
-        log.info("Evento {} publicado en {} partición {} offset {}",
-                event.eventId(), topic,
+    private void logSuccess(MatchEventDTO event, String notifiedTeamId, SendResult<String, MatchEventDTO> result) {
+        log.info("Evento {} para el equipo {} publicado en {} partición {} offset {}",
+                event.eventId(), notifiedTeamId, topic,
                 result.getRecordMetadata().partition(),
                 result.getRecordMetadata().offset());
     }

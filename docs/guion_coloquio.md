@@ -43,7 +43,7 @@ Requisito: **"Implementar seguridad."** Un párrafo de más: JWT validado en dos
 ### 4. El admin ingesta un evento → mensajería → NoSQL → alerta (3 min) — carril B
 
 - `/admin` (logueado como `admin@quienjuega.com`): elegir el partido y equipo que el fan de la demo sigue, tipo `GOAL`, completar y enviar.
-- Abrir Kafka UI (`http://localhost:8090`), tópico `match-events`: el mensaje recién publicado. Requisito: **"Usar mensajería asincrónica."**
+- Abrir Kafka UI (`http://localhost:8090`), tópico `match-events`: los dos mensajes recién publicados, uno por equipo del partido (la key es el equipo cuyos fans se notifican). Requisito: **"Usar mensajería asincrónica."**
 - Mencionar: el evento se persistió primero en **MongoDB** (`match-ingestion-service`) — requisito de base **NoSQL** — y *después* se publicó; si Kafka estuviera caído, el evento no se pierde (`docs/explicacion_mensajeria_kafka.md`).
 - Volver al frontend, `/alerts` del fan: la alerta nueva apareció (botón "Actualizar" si hace falta).
 
@@ -53,11 +53,12 @@ Siguiendo `docs/explicacion_circuit_breaker.md` sección 5, versión corta:
 
 ```bash
 docker compose stop fan-identity-service
-# Ingestar 5-6 eventos GOAL del mismo equipo desde /admin o con curl (siguen dando 201: match-ingestion no depende de fan-identity)
+# Ingestar 3 eventos GOAL del mismo equipo desde /admin o con curl (siguen dando 201: match-ingestion no depende de fan-identity)
+# Cada evento son 2 consultas (una por equipo): con 3 eventos el circuito ya se abre
 curl -s http://localhost:8080/api/alerts/status -H "Authorization: Bearer $TOKEN_ADMIN"   # circuitState: "OPEN", eventos en undispatchedEvents
 docker compose start fan-identity-service
 # esperar a que aparezca UP en Eureka + ~15s de waitDurationInOpenState
-# ingestar 1-2 eventos más
+# ingestar 2 eventos más (3 llamadas de prueba en HALF_OPEN = 2 eventos)
 curl -s http://localhost:8080/api/alerts/status -H "Authorization: Bearer $TOKEN_ADMIN"   # circuitState: "CLOSED" de nuevo
 ```
 

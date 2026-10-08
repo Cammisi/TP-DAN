@@ -40,6 +40,10 @@ public class Notification {
     @Column(name = "team_id", nullable = false)
     private String teamId;
 
+    // Equipo que hizo el evento: null en inicio/fin de partido y en las alertas anteriores a T-81.
+    @Column(name = "event_team_id")
+    private String eventTeamId;
+
     @Column(name = "event_id", nullable = false)
     private String eventId;
 
