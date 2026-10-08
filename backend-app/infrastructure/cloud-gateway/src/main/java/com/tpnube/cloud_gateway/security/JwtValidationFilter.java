@@ -73,10 +73,13 @@ public class JwtValidationFilter extends OncePerRequestFilter {
         return path(request).startsWith("/api/fans/auth/");
     }
 
-    // R-7 (ver explicacion_seguridad.md).
+    // R-7 (ver explicacion_seguridad.md). T-76: /api/catalog también suma su escritura
+    // (crear equipo "al vuelo" desde /admin), mismo criterio que /api/matches.
     private boolean isAdminOnly(HttpServletRequest request) {
         String path = path(request);
-        if (path.startsWith("/api/matches") && !"GET".equals(request.getMethod())) {
+        boolean writeOnCatalogOrMatches = (path.startsWith("/api/matches") || path.startsWith("/api/catalog"))
+                && !"GET".equals(request.getMethod());
+        if (writeOnCatalogOrMatches) {
             return true;
         }
         return path.startsWith("/api/alerts");

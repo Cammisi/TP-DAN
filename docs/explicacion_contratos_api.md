@@ -101,6 +101,7 @@ Todas operan siempre sobre el fan del JWT (nunca sobre un id del body/path).
 |---|---|---|
 | GET | `/api/catalog/leagues` | fan/admin |
 | GET | `/api/catalog/teams` | fan/admin |
+| POST | `/api/catalog/teams` | admin |
 
 **GET /api/catalog/leagues**
 - 200: `[{ "id": string, "name": string }]`
@@ -109,6 +110,12 @@ Todas operan siempre sobre el fan del JWT (nunca sobre un id del body/path).
 - Ambos query params opcionales, se combinan con AND si están los dos.
 - 200: `[{ "id": string, "name": string, "leagueId": string, "leagueName": string }]`
 - El `id` es el mismo `teamId` que acepta `POST /api/fans/subscriptions` y que usa `match-ingestion-service` como string — numérico (`"4"`), no un slug (T-77).
+
+**POST /api/catalog/teams** — crear equipo (T-76, lo usa el admin para "escribir" un equipo nuevo al crear un partido)
+- Request: `{ "name": string, "leagueId": string }`.
+- 201 (equipo nuevo) o 200 (ya existía un equipo con ese `name`, se devuelve tal cual, no se duplica): mismo shape que un item de `GET /api/catalog/teams`.
+- 400 `INVALID_REQUEST` si falta `name` o `leagueId`. 404 `LEAGUE_NOT_FOUND` si `leagueId` no existe.
+- La búsqueda de duplicados es por nombre exacto (sensible a mayúsculas/tildes, mismo límite que R-12): "psg" y "PSG" crean dos equipos distintos.
 
 ### 2.5 Suscriptores por equipo (interno, consume alert-dispatcher)
 

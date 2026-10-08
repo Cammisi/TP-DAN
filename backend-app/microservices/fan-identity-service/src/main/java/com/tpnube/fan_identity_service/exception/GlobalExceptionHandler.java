@@ -32,11 +32,18 @@ public class GlobalExceptionHandler {
     @ExceptionHandler({
             AuthService.InvalidRequestException.class,
             com.tpnube.fan_identity_service.service.SubscriptionService.InvalidRequestException.class,
-            com.tpnube.fan_identity_service.service.NotificationService.InvalidRequestException.class
+            com.tpnube.fan_identity_service.service.NotificationService.InvalidRequestException.class,
+            com.tpnube.fan_identity_service.service.CatalogService.InvalidRequestException.class
     })
     public ResponseEntity<ErrorResponseDTO> handleInvalidRequest(
             RuntimeException ex, HttpServletRequest request) {
         return buildError(HttpStatus.BAD_REQUEST, "INVALID_REQUEST", ex.getMessage(), request);
+    }
+
+    @ExceptionHandler(com.tpnube.fan_identity_service.service.CatalogService.LeagueNotFoundException.class)
+    public ResponseEntity<ErrorResponseDTO> handleLeagueNotFound(
+            com.tpnube.fan_identity_service.service.CatalogService.LeagueNotFoundException ex, HttpServletRequest request) {
+        return buildError(HttpStatus.NOT_FOUND, "LEAGUE_NOT_FOUND", ex.getMessage(), request);
     }
 
     @ExceptionHandler(com.tpnube.fan_identity_service.service.SubscriptionService.TeamNotFoundException.class)

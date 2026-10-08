@@ -32,3 +32,13 @@ Agregar a `explicacion_contratos_api.md`, sección 3 (`/api/matches/**`): fila `
 1. `mvn test` en match-ingestion-service (casos: crea con datos válidos; rechaza mismo equipo; rechaza `homeTeamId` vacío).
 2. Con el stack levantado: `POST /api/matches` con un token admin, dos equipos del catálogo sin partido semilla (ej. Racing Club) → `201`, aparece en `GET /api/matches`.
 3. En el navegador: crear "River vs Racing" desde `/admin`, confirmar que aparece en el buscador (T-75) y que "Equipo" ofrece River/Racing; ingestar un evento para Racing.
+
+## Ampliación 2026-10-07 — escribir un equipo nuevo, no solo elegir
+
+Pedido explícito del integrante: poder tipear equipos que no están en el catálogo (ej. "PSG", "Atlético Tucumán"), no solo elegir entre los ya cargados.
+
+- **Backend — `fan-identity-service`:** nuevo `POST /api/catalog/teams` (admin), `CatalogService.createTeam(name, leagueId)`: si ya existe un equipo con ese `name` exacto lo reutiliza (`200`), si no lo crea (`201`). Nuevo `TeamRepository.findByName`. Excepciones `CatalogService.InvalidRequestException` (`400 INVALID_REQUEST`) y `CatalogService.LeagueNotFoundException` (`404 LEAGUE_NOT_FOUND`), mapeadas en el `GlobalExceptionHandler` existente.
+- **Gateway:** `JwtValidationFilter.isAdminOnly` ahora también exige `ADMIN` para cualquier no-`GET` bajo `/api/catalog/**` (antes solo cubría `/api/matches/**` y `/api/alerts/**`) — sin esto, cualquier fan podría crear equipos.
+- **Frontend — `/admin`:** cada `<select>` de equipo (local/visitante) suma una opción "Otro (escribir nombre)"; al elegirla aparecen un input de nombre y un `<select>` de liga. Al enviar: si el lado es "Otro", primero `createCatalogTeam({name, leagueId})` para obtener el id numérico, después `createMatch` con los ids resueltos. Si los dos lados resuelven al mismo id (mismo nombre tipeado dos veces, o mismo equipo elegido dos veces), se rechaza antes de llamar a `createMatch`.
+- **No implementado a propósito:** autocompletar/tipeo con sugerencias del catálogo mientras se escribe (es un `<select>` + opción "Otro", no un combobox) — alcanza para el pedido y evita una dependencia nueva de UI.
+- **Pendiente:** verificar en Docker (no se reconstruyó la imagen todavía, a pedido explícito del integrante — se hace en un solo lote junto con el resto de los cambios de esta sesión).

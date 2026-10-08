@@ -120,6 +120,10 @@ export function createMatch(match) {
   return apiFetch("/api/matches", { method: "POST", body: match });
 }
 
+export function createCatalogTeam({ name, leagueId }) {
+  return apiFetch("/api/catalog/teams", { method: "POST", body: { name, leagueId } });
+}
+
 // --- Estado del despachador (admin) ---
 export function getAlertsStatus() {
   return apiFetch("/api/alerts/status");

@@ -39,7 +39,7 @@ El gateway reenvía el header `Authorization` intacto; así le llega el token a 
 **Reglas del gateway** (detalle en `docs/explicacion_contratos_api.md`, sección 7):
 
 - Público: solo `/api/fans/auth/**` (login y registro).
-- Solo `ADMIN`: cualquier escritura (método distinto de `GET`) sobre `/api/matches/**`, que hoy es la ingesta de eventos, y todo `/api/alerts/**`. Un fan recibe `403 FORBIDDEN`. La regla es por método y prefijo, no por endpoint puntual: si mañana `match-ingestion-service` agrega otro endpoint de escritura, ya nace protegido, porque ese servicio no tiene seguridad propia.
+- Solo `ADMIN`: cualquier escritura (método distinto de `GET`) sobre `/api/matches/**` o `/api/catalog/**` (T-76: crear partido y crear equipo "al vuelo"), y todo `/api/alerts/**`. Un fan recibe `403 FORBIDDEN`. La regla es por método y prefijo, no por endpoint puntual: si `match-ingestion-service` o `alert-dispatcher-service` agregan otro endpoint de escritura, ya nace protegido, porque no tienen seguridad propia; `fan-identity-service` sí la tiene (su `SecurityConfig`), pero el gateway corta antes de todos modos.
 - Todo lo demás requiere un token válido. "Todo lo demás" incluye `/internal/**` y `/actuator/**` del propio gateway: se niega por defecto y se abre explícitamente, no al revés.
 
 **Detalle de implementación que vale mencionar:** el filtro decide con `request.getServletPath()`, que viene normalizado, y no con `getRequestURI()`. Si no, una ruta como `/api/fans/auth/../../matches` empezaría con el prefijo público y se saltearía el chequeo.

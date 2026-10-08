@@ -2,10 +2,20 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Head from "next/head";
 import RequireAuth from "@/components/RequireAuth";
 import AppLayout from "@/components/AppLayout";
-import { getMatches, getCatalogTeams, ingestMatchEvent, createMatch, getAlertsStatus } from "@/lib/api";
+import {
+  getMatches,
+  getCatalogTeams,
+  getCatalogLeagues,
+  ingestMatchEvent,
+  createMatch,
+  createCatalogTeam,
+  getAlertsStatus,
+} from "@/lib/api";
 import styles from "@/styles/Admin.module.css";
 
 const CUSTOM_TYPE = "CUSTOM";
+// Sentinel para "escribir un equipo nuevo" en vez de elegir uno del catálogo (T-76).
+const NEW_TEAM = "__NEW__";
 
 const EVENT_TYPES = [
   { value: "GOAL", label: "Gol" },
@@ -29,11 +39,16 @@ function AdminContent() {
   const [matches, setMatches] = useState([]);
   const [teamNames, setTeamNames] = useState({});
   const [catalogTeams, setCatalogTeams] = useState([]);
+  const [leagues, setLeagues] = useState([]);
   const [matchId, setMatchId] = useState("");
   const [matchQuery, setMatchQuery] = useState("");
 
   const [newHomeTeamId, setNewHomeTeamId] = useState("");
+  const [newHomeTeamName, setNewHomeTeamName] = useState("");
+  const [newHomeLeagueId, setNewHomeLeagueId] = useState("");
   const [newAwayTeamId, setNewAwayTeamId] = useState("");
+  const [newAwayTeamName, setNewAwayTeamName] = useState("");
+  const [newAwayLeagueId, setNewAwayLeagueId] = useState("");
   const [createMatchError, setCreateMatchError] = useState(null);
   const [createMatchResult, setCreateMatchResult] = useState(null);
   const [isCreatingMatch, setIsCreatingMatch] = useState(false);
@@ -58,18 +73,31 @@ function AdminContent() {
 
   const loadMatches = useCallback(() => getMatches().then(setMatches), []);
 
-  useEffect(() => {
-    Promise.all([getMatches(), getCatalogTeams()])
-      .then(([matchesResult, teamsResult]) => {
-        setMatches(matchesResult);
-        if (matchesResult.length > 0) setMatchId(matchesResult[0].id);
+  // Separado de loadMatches: crear un equipo nuevo (T-76) solo necesita refrescar esto.
+  const loadCatalogTeams = useCallback(
+    () =>
+      getCatalogTeams().then((teamsResult) => {
         setCatalogTeams(teamsResult);
         const names = {};
         for (const team of teamsResult) names[team.id] = team.name;
         setTeamNames(names);
+      }),
+    []
+  );
+
+  useEffect(() => {
+    Promise.all([getMatches(), loadCatalogTeams(), getCatalogLeagues()])
+      .then(([matchesResult, , leaguesResult]) => {
+        setMatches(matchesResult);
+        if (matchesResult.length > 0) setMatchId(matchesResult[0].id);
+        setLeagues(leaguesResult);
+        if (leaguesResult.length > 0) {
+          setNewHomeLeagueId(leaguesResult[0].id);
+          setNewAwayLeagueId(leaguesResult[0].id);
+        }
       })
       .catch((err) => setSubmitError(err.message));
-  }, []);
+  }, [loadCatalogTeams]);
 
   const loadStatus = useCallback(async () => {
     setIsStatusLoading(true);
@@ -117,19 +145,36 @@ function AdminContent() {
     }));
   }, [selectedMatch, teamNames]);
 
+  // Si eligieron "Otro", primero hay que crear el equipo en el catálogo para tener su id
+  // numérico (T-77) — match-ingestion no tiene catálogo propio (D-1), no puede crearlo él.
+  async function resolveTeam(selectedId, typedName, leagueId) {
+    if (selectedId !== NEW_TEAM) {
+      return { id: selectedId, name: teamNames[selectedId] ?? selectedId };
+    }
+    const team = await createCatalogTeam({ name: typedName.trim(), leagueId });
+    return { id: team.id, name: team.name };
+  }
+
   async function handleCreateMatch(event) {
     event.preventDefault();
     setCreateMatchError(null);
     setCreateMatchResult(null);
     setIsCreatingMatch(true);
     try {
-      const created = await createMatch({ homeTeamId: newHomeTeamId, awayTeamId: newAwayTeamId });
-      await loadMatches();
+      const home = await resolveTeam(newHomeTeamId, newHomeTeamName, newHomeLeagueId);
+      const away = await resolveTeam(newAwayTeamId, newAwayTeamName, newAwayLeagueId);
+      if (home.id === away.id) {
+        throw new Error("El equipo local y el visitante no pueden ser el mismo");
+      }
+      const created = await createMatch({ homeTeamId: home.id, awayTeamId: away.id });
+      await Promise.all([loadMatches(), loadCatalogTeams()]);
       setMatchId(created.id);
       setMatchQuery("");
-      setCreateMatchResult(matchLabel(created));
+      setCreateMatchResult(`${home.name} vs ${away.name}`);
       setNewHomeTeamId("");
+      setNewHomeTeamName("");
       setNewAwayTeamId("");
+      setNewAwayTeamName("");
     } catch (err) {
       setCreateMatchError(err.message);
     } finally {
@@ -172,7 +217,14 @@ function AdminContent() {
     }
   }
 
-  const canCreateMatch = newHomeTeamId && newAwayTeamId && newHomeTeamId !== newAwayTeamId;
+  // Si es "Otro", alcanza con el nombre tipeado; la liga siempre tiene un valor por default.
+  // Si los dos lados son "Otro", no se puede comparar el id todavía (se crea al enviar):
+  // ese caso lo valida handleCreateMatch después de resolver ambos equipos.
+  const homeTeamReady = newHomeTeamId === NEW_TEAM ? newHomeTeamName.trim() : newHomeTeamId;
+  const awayTeamReady = newAwayTeamId === NEW_TEAM ? newAwayTeamName.trim() : newAwayTeamId;
+  const sameExistingTeam =
+    newHomeTeamId !== NEW_TEAM && newAwayTeamId !== NEW_TEAM && newHomeTeamId === newAwayTeamId;
+  const canCreateMatch = homeTeamReady && awayTeamReady && !sameExistingTeam;
 
   return (
     <AppLayout title="Panel de administrador">
@@ -193,8 +245,40 @@ function AdminContent() {
                   {team.name}
                 </option>
               ))}
+              <option value={NEW_TEAM}>Otro (escribir nombre)</option>
             </select>
           </div>
+
+          {newHomeTeamId === NEW_TEAM && (
+            <>
+              <div className={styles.field}>
+                <label htmlFor="newHomeTeamName">Nombre del equipo local</label>
+                <input
+                  id="newHomeTeamName"
+                  type="text"
+                  placeholder="Ej: PSG"
+                  required
+                  value={newHomeTeamName}
+                  onChange={(e) => setNewHomeTeamName(e.target.value)}
+                />
+              </div>
+              <div className={styles.field}>
+                <label htmlFor="newHomeLeagueId">Liga del equipo local</label>
+                <select
+                  id="newHomeLeagueId"
+                  value={newHomeLeagueId}
+                  onChange={(e) => setNewHomeLeagueId(e.target.value)}
+                  required
+                >
+                  {leagues.map((league) => (
+                    <option key={league.id} value={league.id}>
+                      {league.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </>
+          )}
 
           <div className={styles.field}>
             <label htmlFor="newAwayTeamId">Equipo visitante</label>
@@ -210,8 +294,40 @@ function AdminContent() {
                   {team.name}
                 </option>
               ))}
+              <option value={NEW_TEAM}>Otro (escribir nombre)</option>
             </select>
           </div>
+
+          {newAwayTeamId === NEW_TEAM && (
+            <>
+              <div className={styles.field}>
+                <label htmlFor="newAwayTeamName">Nombre del equipo visitante</label>
+                <input
+                  id="newAwayTeamName"
+                  type="text"
+                  placeholder="Ej: Real Madrid"
+                  required
+                  value={newAwayTeamName}
+                  onChange={(e) => setNewAwayTeamName(e.target.value)}
+                />
+              </div>
+              <div className={styles.field}>
+                <label htmlFor="newAwayLeagueId">Liga del equipo visitante</label>
+                <select
+                  id="newAwayLeagueId"
+                  value={newAwayLeagueId}
+                  onChange={(e) => setNewAwayLeagueId(e.target.value)}
+                  required
+                >
+                  {leagues.map((league) => (
+                    <option key={league.id} value={league.id}>
+                      {league.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </>
+          )}
 
           <button type="submit" className={styles.submit} disabled={isCreatingMatch || !canCreateMatch}>
             {isCreatingMatch ? "Creando…" : "Crear partido"}

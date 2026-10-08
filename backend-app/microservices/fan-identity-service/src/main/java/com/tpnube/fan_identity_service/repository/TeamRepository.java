@@ -6,11 +6,15 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.util.List;
+import java.util.Optional;
 
 public interface TeamRepository extends JpaRepository<Team, Long> {
 
     // Para la siembra idempotente: el id ya no es manual, así que se chequea por nombre (T-77).
     boolean existsByName(String name);
+
+    // Para crear equipos "al vuelo" desde /admin (T-76): si el nombre ya existe, se reutiliza.
+    Optional<Team> findByName(String name);
 
     // El CAST de :name a string es necesario: Postgres no puede inferir el tipo
     // de un parámetro null dentro de LOWER(CONCAT(...)) y falla con

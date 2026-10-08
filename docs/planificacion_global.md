@@ -525,15 +525,16 @@ La Fase 0 y la Fase 2 se hacen **juntos**: definen contratos y tocan puntos de i
   - **Decisiones tomadas:** los tipos conocidos no cambian; el texto libre no tiene lista cerrada. Los nombres de equipo en la alerta se resuelven en el frontend con el catálogo: alert-dispatcher no tiene catálogo (D-1), así que no se agregaron al mensaje guardado.
   - **Terminada cuando:** en `/admin` se encuentra un partido escribiendo parte de un equipo; se ingesta un "Penal" y el fan que sigue ese equipo ve en `/alerts` "Penal (…) — …" con el nombre del equipo. **Pendiente:** la parte de `/admin` (buscar partido) y el nombre del equipo en `/alerts` están compilados y revisados por código, pero falta verificarlos en el navegador. Marcar la tarea cuando se confirmen.
 
-- [x] **T-76 · Admin: crear partidos** — `match-ingestion-service`, `frontend-app/pages/admin.js` · depende de: T-20, T-65 · carril C · [plan](plan_76_admin_crear_partidos.md)
-  - **Qué:** nuevo `POST /api/matches` (admin) que crea un partido elegido por dos equipos del catálogo; en `/admin` se agrega un formulario para esto, y el partido creado aparece de inmediato en el buscador de T-75 con sus dos equipos disponibles en "Equipo".
-  - **Por qué:** pedido por el grupo en la reunión del 2026-10-06. Hoy solo existen los 3 partidos semilla (`DataSeeder`), así que un equipo del catálogo sin partido (ej. Racing Club) nunca puede disparar una alerta.
-  - **Afecta:** `MatchController`/`MatchService` en match-ingestion (nuevo endpoint); `pages/admin.js`, `lib/api.js`; contrato en `explicacion_contratos_api.md` (sección 3).
+- [x] **T-76 · Admin: crear partidos** — `match-ingestion-service`, `fan-identity-service`, `cloud-gateway`, `frontend-app/pages/admin.js` · depende de: T-20, T-65 · carril C · [plan](plan_76_admin_crear_partidos.md)
+  - **Qué:** nuevo `POST /api/matches` (admin) que crea un partido elegido por dos equipos; en `/admin` cada equipo se puede **elegir del catálogo o escribir uno nuevo** (ej. "PSG", "Atlético Tucumán") — si se escribe, primero se crea con `POST /api/catalog/teams` (admin, T-76 ampliada el 2026-10-07 a pedido explícito: "escribir y/o elegir", no solo elegir entre los ya cargados). El partido creado aparece de inmediato en el buscador de T-75 con sus dos equipos disponibles en "Equipo".
+  - **Por qué:** pedido por el grupo en la reunión del 2026-10-06. Hoy solo existen los 3 partidos semilla (`DataSeeder`), así que un equipo del catálogo sin partido (ej. Racing Club) nunca puede disparar una alerta; y limitar a elegir entre los equipos ya cargados no alcanza para una demo con equipos arbitrarios.
+  - **Afecta:** `MatchController`/`MatchService` en match-ingestion (nuevo endpoint); `CatalogController`/`CatalogService`/`TeamRepository` en fan-identity (nuevo endpoint de creación); `JwtValidationFilter.isAdminOnly` en el gateway (suma `/api/catalog/**` no-`GET`); `pages/admin.js`, `lib/api.js`; contrato en `explicacion_contratos_api.md` (secciones 2 y 3); `explicacion_seguridad.md`.
   - **Requisitos:**
     - [x] `POST /api/matches` valida `homeTeamId`/`awayTeamId` obligatorios y distintos entre sí; el partido nace `SCHEDULED` sin marcador. *`MatchServiceTest` (4 casos) + verificado en Docker: mismo equipo como local/visitante → `400 INVALID_MATCH`.*
     - [x] El gateway ya exige rol `ADMIN` para esto sin cambios (`JwtValidationFilter.isAdminOnly` cubre todo no-`GET` de `/api/matches/**`) — verificado: el `path.startsWith("/api/matches")` de la condición cubre `/api/matches` sin sufijo.
     - [x] En `/admin`, crear un partido lo deja elegible en el buscador de T-75 sin recargar la página, y el campo "Equipo" muestra los dos equipos elegidos.
-  - **Terminada cuando:** desde `/admin` se crea "River vs Racing", aparece en el buscador, y se puede ingestar un evento para Racing Club (equipo sin partido semilla). *Verificado 2026-10-07 con el stack completo: `POST /api/matches` con `homeTeamId:"3", awayTeamId:"5"` → `201`; se ingestó un `GOAL` y después un `CARD` para el equipo 5 en ese partido nuevo; `fan1` (suscripto a Racing) recibió la alerta del `CARD` ("Tarjeta amarilla para Prueba Racing 2 (40')").*
+    - [x] En `/admin`, cada equipo del formulario "Crear partido" se puede elegir del catálogo **o** escribir un nombre nuevo (con su liga); escribir un nombre que ya existe reutiliza ese equipo en vez de duplicarlo. *Verificado por API 2026-10-07: `POST /api/catalog/teams` con "PSG" → `201` (id nuevo); repetido con el mismo nombre → `200` (mismo id, no duplica); liga inexistente → `404 LEAGUE_NOT_FOUND`; un fan (no admin) → `403`. El formulario de `/admin` llama a estos mismos endpoints — falta solo la confirmación visual en el navegador.*
+  - **Terminada cuando:** desde `/admin` se crea "River vs Racing" eligiendo ambos del catálogo, y por separado "PSG vs Real Madrid" escribiendo los dos nombres — los dos aparecen en el buscador y se puede ingestar un evento para cualquiera de los cuatro equipos. *Elegir del catálogo verificado 2026-10-07 con el stack completo: `POST /api/matches` con `homeTeamId:"3", awayTeamId:"5"` → `201`; se ingestó un `GOAL` y después un `CARD` para el equipo 5; `fan1` (suscripto a Racing) recibió la alerta. Escribir equipos nuevos verificado por API: se creó PSG (id 8) y Real Madrid (id 9), y el partido `POST /api/matches` con esos ids → `201`. Falta la confirmación visual del formulario en el navegador.*
 
 - [x] **T-77 · IDs numéricos para equipos** — `fan-identity-service` · depende de: T-15 · carril C · [plan](plan_77_ids_numericos_equipos.md)
   - **Qué:** el id de `Team` pasa de slug manual (`"team-colon"`) a numérico autogenerado (`1, 2, 3, …`), igual que `Fan`/`Subscription`/`Notification`. El contrato HTTP no cambia de tipo: `teamId` sigue viajando como string en JSON/Kafka/Mongo (D-1), solo que ahora contiene dígitos (`"4"`) en vez de un slug.
@@ -558,8 +559,8 @@ La Fase 0 y la Fase 2 se hacen **juntos**: definen contratos y tocan puntos de i
 | 2 — Integración y seguridad | 3 | 3 |
 | 3 — Requisitos transversales | 2 | 2 |
 | 4 — Frontend | 6 | 6 |
-| 5 — Cierre y entrega | 7 | 5 |
-| **Total** | **33** | **31** |
+| 5 — Cierre y entrega | 8 | 5 |
+| **Total** | **34** | **31** |
 
 > T-66 (Panel Principal) es una tarea **propuesta**, no forma parte del recuento de 31: se agrega a la tabla si el grupo decide tomarla.
 
