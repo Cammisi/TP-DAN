@@ -1,13 +1,16 @@
 package com.tpnube.alert_dispatcher_service;
 
+import com.tpnube.alert_dispatcher_service.service.FanIdentityLookupService;
 import feign.RequestInterceptor;
 import feign.RequestTemplate;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.cloud.client.circuitbreaker.CircuitBreakerFactory;
 import org.springframework.cloud.openfeign.FeignClientFactory;
 import org.springframework.cloud.openfeign.FeignClientProperties;
 
+import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 
@@ -19,12 +22,15 @@ class AlertDispatcherServiceApplicationTests {
 
 	private final FeignClientProperties feignClientProperties;
 	private final FeignClientFactory feignClientFactory;
+	private final CircuitBreakerFactory<?, ?> circuitBreakerFactory;
 
 	@Autowired
 	AlertDispatcherServiceApplicationTests(FeignClientProperties feignClientProperties,
-										   FeignClientFactory feignClientFactory) {
+										   FeignClientFactory feignClientFactory,
+										   CircuitBreakerFactory<?, ?> circuitBreakerFactory) {
 		this.feignClientProperties = feignClientProperties;
 		this.feignClientFactory = feignClientFactory;
+		this.circuitBreakerFactory = circuitBreakerFactory;
 	}
 
 	@Test
@@ -56,6 +62,24 @@ class AlertDispatcherServiceApplicationTests {
 				feignClientFactory.getInstances("otro-servicio", RequestInterceptor.class);
 
 		assertTrue(interceptors == null || interceptors.isEmpty());
+	}
+
+	// R-16: con el default de 1 s del TimeLimiter, esta llamada de 1,5 s caería al fallback.
+	@Test
+	void fanIdentityCircuitBreakerAllowsCallsUpToThreeSeconds() {
+		String result = circuitBreakerFactory.create(FanIdentityLookupService.CIRCUIT_BREAKER_NAME)
+				.run(() -> slowCall(Duration.ofMillis(1500)), throwable -> "fallback");
+
+		assertEquals("ok", result);
+	}
+
+	private static String slowCall(Duration duration) {
+		try {
+			Thread.sleep(duration);
+		} catch (InterruptedException e) {
+			Thread.currentThread().interrupt();
+		}
+		return "ok";
 	}
 
 }

@@ -1,7 +1,6 @@
 package com.tpnube.alert_dispatcher_service.config;
 
 import io.github.resilience4j.circuitbreaker.CircuitBreakerConfig;
-import io.github.resilience4j.timelimiter.TimeLimiterConfig;
 import org.springframework.cloud.circuitbreaker.resilience4j.Resilience4JCircuitBreakerFactory;
 import org.springframework.cloud.circuitbreaker.resilience4j.Resilience4JConfigBuilder;
 import org.springframework.cloud.client.circuitbreaker.Customizer;
@@ -22,9 +21,6 @@ public class CircuitBreakerConfiguration {
                         .failureRateThreshold(50)
                         .waitDurationInOpenState(Duration.ofSeconds(15))
                         .permittedNumberOfCallsInHalfOpenState(3)
-                        .build())
-                .timeLimiterConfig(TimeLimiterConfig.custom()
-                        .timeoutDuration(Duration.ofSeconds(3))
                         .build())
                 .build());
     }

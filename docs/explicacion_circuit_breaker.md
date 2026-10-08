@@ -10,7 +10,7 @@ El Circuit Breaker corta ese camino: después de una cantidad de fallos, deja de
 
 ## 2. Estados y configuración
 
-`CircuitBreakerConfiguration` (`alert-dispatcher-service`) define un único circuito (`fanIdentityService`) que envuelve la llamada Feign a `GET /internal/fans/subscribers/{teamId}`:
+`alert-dispatcher-service` define un único circuito (`fanIdentityService`) que envuelve la llamada Feign a `GET /internal/fans/subscribers/{teamId}`. Todos los parámetros están en `CircuitBreakerConfiguration`, salvo el timeout del TimeLimiter, que va en `application.yaml` (sección 3):
 
 | Parámetro | Valor | Por qué |
 |---|---|---|
@@ -32,6 +32,7 @@ Estados posibles:
 ## 3. Dónde está en el código
 
 - `config/CircuitBreakerConfiguration.java`: la configuración de arriba, vía `Customizer<Resilience4JCircuitBreakerFactory>` (API programática de Spring Cloud CircuitBreaker; **no** la anotación `@CircuitBreaker`, que requiere otra dependencia — ver gotcha en `CLAUDE.md`).
+- `application.yaml`: el timeout del TimeLimiter (`resilience4j.timelimiter.instances.fanIdentityService.timeout-duration: 3s`). Puesto en el `Customizer`, la librería lo ignora sin avisar y usa 1 s: así estuvo hasta T-78 (R-16, gotcha en `CLAUDE.md`).
 - `service/FanIdentityLookupService.java`: envuelve la llamada Feign con `circuitBreakerFactory.create("fanIdentityService").run(...)`.
 - `service/DispatcherStatusService.java`: lee el estado actual con `CircuitBreakerRegistry.find("fanIdentityService")` (inyectado directo, autoconfigurado por `resilience4j-spring-boot3`).
 - `controller/DispatcherStatusController.java`: expone `GET /api/alerts/status` (D-6).

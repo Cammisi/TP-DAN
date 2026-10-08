@@ -23,6 +23,12 @@ spring:
             connect-timeout: 1000
             read-timeout: 3000 # el callback de notificación no pasa por el Circuit Breaker (ver explicacion_circuit_breaker.md)
 
+resilience4j:
+  timelimiter:
+    instances:
+      fanIdentityService:
+        timeout-duration: 3s # acá y no en CircuitBreakerConfiguration, que lo ignora (ver CLAUDE.md)
+
 eureka:
   client:
     service-url:
